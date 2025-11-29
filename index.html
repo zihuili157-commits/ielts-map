@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS World Tour | 雅思环球手账</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        body {
+            font-family: "Inter", "Noto Sans SC", sans-serif;
+            background-color: #e0e0e0;
+            overflow: hidden; 
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .paper-texture {
+            background-color: #fffbf0;
+            background-image: linear-gradient(#e5e5e5 1px, transparent 1px);
+            background-size: 100% 25px;
+            line-height: 25px;
+        }
+
+        /* 地图填充色 */
+        .fill-high { fill: #f1c40f !important; transition: fill 0.5s; filter: drop-shadow(0 0 2px rgba(241, 196, 15, 0.5)); } 
+        .fill-mid { fill: #2ecc71 !important; transition: fill 0.5s; }  
+        .fill-pass { fill: #fd79a8 !important; transition: fill 0.5s; }  
+        .fill-low { fill: #e74c3c !important; transition: fill 0.5s; }  
+        .fill-default { fill: #fff; stroke: #2c3e50; stroke-width: 0.5; transition: fill 0.5s; }
+        .fill-default:hover { fill: #ecf0f1; cursor: pointer; }
+
+        /* 邮票效果 - 底部展架 */
+        .stamp-card {
+            background: white;
+            border: 6px solid white; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stamp-card:hover {
+            transform: translateY(-10px) scale(1.05);
+            z-index: 10;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.25);
+        }
+        .stamp-card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle, transparent 95%, #000 150%);
+            opacity: 0.1;
+            pointer-events: none;
+        }
+
+        /* HUD 样式 */
+        .hud-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 14px 18px;
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #6B7280;
+            text-transform: uppercase;
+        }
+        .hud-level { color: #3B82F6; font-weight: 700; font-size: 11px; background: #EFF6FF; padding: 2px 8px; border-radius: 4px; }
+        .hud-trophy { color: #EAB308; }
+        .hud-progress-bg {
+            width: 100%; height: 10px; background-color: #F3F4F6; border-radius: 999px; overflow: hidden; margin-top: 2px;
+        }
+        .hud-progress-bar {
+            height: 100%; background-color: #D1D5DB; border-radius: 999px; transition: width 1s ease-out;
+        }
+        .hud-value { font-size: 0.85rem; color: #9CA3AF; margin-top: 2px; font-family: monospace; font-weight: 600; }
+
+        /* 动画 */
+        .tooltip-enter { animation: tooltipIn 0.2s ease-out forwards; }
+        @keyframes tooltipIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- 图标组件 ---
+        const IconWrapper = ({ children, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
+        );
+        
+        const Icons = {
+            MapPin: (p) => <IconWrapper {...p}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></IconWrapper>,
+            Camera: (p) => <IconWrapper {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconWrapper>,
+            Book: (p) => <IconWrapper {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></IconWrapper>,
+            Chart: (p) => <IconWrapper {...p}><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></IconWrapper>,
+            Plus: (p) => <IconWrapper {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconWrapper>,
+            Minus: (p) => <IconWrapper {...p}><path d="M5 12h14"/></IconWrapper>,
+            Refresh: (p) => <IconWrapper {...p}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></IconWrapper>,
+            RotateCcw: (p) => <IconWrapper {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></IconWrapper>,
+            Compass: (p) => <IconWrapper {...p}><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></IconWrapper>,
+            Loader: (p) => <IconWrapper {...p}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconWrapper>,
+            X: (p) => <IconWrapper {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconWrapper>,
+            Quote: (p) => <IconWrapper {...p}><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></IconWrapper>,
+            ImageOff: (p) => <IconWrapper {...p}><line x1="2" x2="22" y1="2" y2="22"/><path d="M10.41 6.643A2 2 0 0 1 12.293 6H19a2 2 0 0 1 2 2v11a2 2 0 0 1-1.357 1.936"/><path d="M13.5 13.5 6.5 20.5 3 17"/><path d="M2 12V8a2 2 0 0 1 2-2h1.293"/><path d="M8.5 22H4a2 2 0 0 1-2-2v-2.293"/></IconWrapper>,
+            Plane: (p) => <IconWrapper {...p}><path d="M2 12h20"/><path d="m13 2-4 10H5l3 3"/><path d="m11 22 4-10h4l-3-3"/></IconWrapper>,
+            Pen: (p) => <IconWrapper {...p}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconWrapper>,
+            Layers: (p) => <IconWrapper {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconWrapper>,
+            List: (p) => <IconWrapper {...p}><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></IconWrapper>,
+            Trash: (p) => <IconWrapper {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconWrapper>,
+            Trophy: (p) => <IconWrapper {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconWrapper>
+        };
+
+        const GEOJSON_URL = 'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson';
+        const TARGET_DATE = new Date('2025-12-28');
+
+        const SUBJECT_CONFIG = {
+            'L': { label: 'Listening 听力', icon: '🎧', color: '#3498db', parts: ['S1', 'S2', 'S3', 'S4'] },
+            'R': { label: 'Reading 阅读', icon: '📖', color: '#f1c40f', parts: ['P1', 'P2', 'P3'] },
+            'W': { label: 'Writing 写作', icon: '✍️', color: '#9b59b6', parts: ['Task 1', 'Task 2'] },
+            'S': { label: 'Speaking 口语', icon: '🗣️', color: '#e67e22', parts: ['Part 1', 'Part 2', 'Part 3'] }
+        };
+
+        const DIAGNOSIS_TAGS = {
+            'L': ['拼写错误', '单复数', '定位失败', '跟丢录音', '同义替换', '干扰项', '词汇盲区', '语速过快'],
+            'R': ['长难句', '定位不到', 'NG/False混淆', '单词不识', '时间不够', '逻辑错误', '主旨题'],
+            'W': ['逻辑跳跃', '观点空洞', '词汇单一', '语法错误', '跑题', '字数不够', '连接词缺失', '审题不清'],
+            'S': ['发音不准', '流利度', '词汇重复', '语法错误', '卡顿', '时态错误', '回答太短', '逻辑不清']
+        };
+
+        // 174个国家/地区映射 (已移除 ATA, ATF)
+        const COUNTRY_CN_MAP = {
+            'AFG': '阿富汗', 'AGO': '安哥拉', 'ALB': '阿尔巴尼亚', 'ARE': '阿联酋', 'ARG': '阿根廷', 'ARM': '亚美尼亚', 'AUS': '澳大利亚', 'AUT': '奥地利', 'AZE': '阿塞拜疆',
+            'BDI': '布隆迪', 'BEL': '比利时', 'BEN': '贝宁', 'BFA': '布基纳法索', 'BGD': '孟加拉国', 'BGR': '保加利亚', 'BHS': '巴哈马', 'BIH': '波黑', 'BLR': '白俄罗斯', 'BLZ': '伯利兹', 'BOL': '玻利维亚', 'BRA': '巴西', 'BRN': '文莱', 'BTN': '不丹', 'BWA': '博茨瓦纳',
+            'CAF': '中非', 'CAN': '加拿大', 'CHE': '瑞士', 'CHL': '智利', 'CHN': '中国', 'CIV': '科特迪瓦', 'CMR': '喀麦隆', 'COD': '刚果(金)', 'COG': '刚果(布)', 'COL': '哥伦比亚', 'CRI': '哥斯达黎加', 'CUB': '古巴', 'CYP': '塞浦路斯', 'CZE': '捷克',
+            'DEU': '德国', 'DJI': '吉布提', 'DNK': '丹麦', 'DOM': '多米尼加', 'DZA': '阿尔及利亚',
+            'ECU': '厄瓜多尔', 'EGY': '埃及', 'ERI': '厄立特里亚', 'ESP': '西班牙', 'EST': '爱沙尼亚', 'ETH': '埃塞俄比亚',
+            'FIN': '芬兰', 'FJI': '斐济', 'FLK': '福克兰群岛', 'FRA': '法国',
+            'GAB': '加蓬', 'GBR': '英国', 'GEO': '格鲁吉亚', 'GHA': '加纳', 'GIN': '几内亚', 'GMB': '冈比亚', 'GNB': '几内亚比绍', 'GNQ': '赤道几内亚', 'GRC': '希腊', 'GRL': '格陵兰', 'GTM': '危地马拉', 'GUY': '圭亚那',
+            'HND': '洪都拉斯', 'HRV': '克罗地亚', 'HTI': '海地', 'HUN': '匈牙利',
+            'IDN': '印度尼西亚', 'IND': '印度', 'IRL': '爱尔兰', 'IRN': '伊朗', 'IRQ': '伊拉克', 'ISL': '冰岛', 'ISR': '以色列', 'ITA': '意大利',
+            'JAM': '牙买加', 'JOR': '约旦', 'JPN': '日本',
+            'KAZ': '哈萨克斯坦', 'KEN': '肯尼亚', 'KGZ': '吉尔吉斯斯坦', 'KHM': '柬埔寨', 'KOR': '韩国', 'XKX': '科索沃', 'KWT': '科威特',
+            'LAO': '老挝', 'LBN': '黎巴嫩', 'LBR': '利比里亚', 'LBY': '利比亚', 'LKA': '斯里兰卡', 'LSO': '莱索托', 'LTU': '立陶宛', 'LUX': '卢森堡', 'LVA': '拉脱维亚',
+            'MAR': '摩洛哥', 'MDA': '摩尔多瓦', 'MDG': '马达加斯加', 'MEX': '墨西哥', 'MKD': '北马其顿', 'MLI': '马里', 'MMR': '缅甸', 'MNE': '黑山', 'MNG': '蒙古', 'MOZ': '莫桑比克', 'MRT': '毛里塔尼亚', 'MWI': '马拉维', 'MYS': '马来西亚',
+            'NAM': '纳米比亚', 'NCL': '新喀里多尼亚', 'NER': '尼日尔', 'NGA': '尼日利亚', 'NIC': '尼加拉瓜', 'NLD': '荷兰', 'NOR': '挪威', 'NPL': '尼泊尔', 'NZL': '新西兰',
+            'OMN': '阿曼',
+            'PAK': '巴基斯坦', 'PAN': '巴拿马', 'PER': '秘鲁', 'PHL': '菲律宾', 'PNG': '巴布亚新几内亚', 'POL': '波兰', 'PRI': '波多黎各', 'PRK': '朝鲜', 'PRT': '葡萄牙', 'PRY': '巴拉圭', 'PSE': '巴勒斯坦',
+            'QAT': '卡塔尔',
+            'ROU': '罗马尼亚', 'RUS': '俄罗斯', 'RWA': '卢旺达',
+            'SAU': '沙特阿拉伯', 'SDN': '苏丹', 'SEN': '塞内加尔', 'SLB': '所罗门群岛', 'SLE': '塞拉利昂', 'SLV': '萨尔瓦多', 'SOM': '索马里', 'SRB': '塞尔维亚', 'SSD': '南苏丹', 'SUR': '苏里南', 'SVK': '斯洛伐克', 'SVN': '斯洛文尼亚', 'SWE': '瑞典', 'SWZ': '斯威士兰', 'SYR': '叙利亚',
+            'TCD': '乍得', 'TGO': '多哥', 'THA': '泰国', 'TJK': '塔吉克斯坦', 'TKM': '土库曼斯坦', 'TLS': '东帝汶', 'TTO': '特立尼达和多巴哥', 'TUN': '突尼斯', 'TUR': '土耳其', 'TWN': '台湾', 'TZA': '坦桑尼亚',
+            'UGA': '乌干达', 'UKR': '乌克兰', 'URY': '乌拉圭', 'USA': '美国', 'UZB': '乌兹别克斯坦',
+            'VEN': '委内瑞拉', 'VNM': '越南', 'VUT': '瓦努阿图',
+            'YEM': '也门',
+            'ZAF': '南非', 'ZMB': '赞比亚', 'ZWE': '津巴布韦'
+        };
+
+        // 16个稳定地标 (删除4个问题项)
+        const LANDMARKS = [
+            { id: 1, name: '新天鹅堡', location: 'Germany 德国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Schloss_Neuschwanstein_2013.jpg/800px-Schloss_Neuschwanstein_2013.jpg', desc: '迪士尼城堡的原型', quote: '每个人的心中，都住着一个童话。' },
+            { id: 2, name: '自由女神像', location: 'USA 美国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Statue_of_Liberty_7.jpg/640px-Statue_of_Liberty_7.jpg', desc: '照耀世界的自由之光', quote: '读万卷书，行万里路。' },
+            { id: 3, name: '万里长城', location: 'China 中国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/The_Great_Wall_of_China_at_Jinshanling-edit.jpg/640px-The_Great_Wall_of_China_at_Jinshanling-edit.jpg', desc: '巨龙蜿蜒，千年守护', quote: '不到长城非好汉，不走天涯怎知远。' },
+            { id: 5, name: '滨海湾金沙', location: 'Singapore 新加坡', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Marina_Bay_Sands_in_the_evening_-_20101120.jpg/800px-Marina_Bay_Sands_in_the_evening_-_20101120.jpg', desc: '花园城市的空中花园', quote: '未来之城，今日可见。' },
+            { id: 7, name: '大笨钟', location: 'UK 英国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Clock_Tower_-_Palace_of_Westminster%2C_London_-_May_2007.jpg/640px-Clock_Tower_-_Palace_of_Westminster%2C_London_-_May_2007.jpg', desc: '泰晤士河畔的钟声', quote: '时间会流逝，但记忆永存。' },
+            { id: 8, name: '泰姬陵', location: 'India 印度', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/Taj_Mahal%2C_Agra%2C_India_edit3.jpg/640px-Taj_Mahal%2C_Agra%2C_India_edit3.jpg', desc: '永恒面颊上的一滴泪', quote: '爱是旅行中通用的语言。' },
+            { id: 9, name: '罗马斗兽场', location: 'Italy 意大利', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Colosseo_2020.jpg/640px-Colosseo_2020.jpg', desc: '角斗士的荣耀与血泪', quote: '条条大路通罗马，愿你找到属于你的那条路。' },
+            { id: 10, name: '马丘比丘', location: 'Peru 秘鲁', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Machu_Picchu%2C_Peru.jpg/640px-Machu_Picchu%2C_Peru.jpg', desc: '云端的失落之城', quote: '迷路也是一种探索世界的方式。' },
+            { id: 11, name: '金字塔', location: 'Egypt 埃及', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/All_Gizah_Pyramids.jpg/640px-All_Gizah_Pyramids.jpg', desc: '沙漠中的永恒谜题', quote: '历史在沉睡，等待旅人的脚步将其唤醒。' },
+            { id: 12, name: '帕特农神庙', location: 'Greece 希腊', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/The_Parthenon_in_Athens.jpg/640px-The_Parthenon_in_Athens.jpg', desc: '雅典卫城的荣耀', quote: '文明的微光，照亮了千年的黑暗。' },
+            { id: 13, name: '金门大桥', location: 'USA 美国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/GoldenGateBridge-001.jpg/640px-GoldenGateBridge-001.jpg', desc: '跨越海湾的红色奇迹', quote: '桥梁连接的不仅是土地，更是人心。' },
+            { id: 14, name: '圣家堂', location: 'Spain 西班牙', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Sagrada_Familia_01.jpg/640px-Sagrada_Familia_01.jpg', desc: '上帝的建筑师之作', quote: '未完成，意味着无限的可能。' },
+            { id: 15, name: '佩特拉古城', location: 'Jordan 约旦', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Treasury_petra_crop.jpeg/640px-Treasury_petra_crop.jpeg', desc: '玫瑰色的岩石奇迹', quote: '穿越千年的时光，只为与你相遇。' },
+            { id: 17, name: '吴哥窟', location: 'Cambodia 柬埔寨', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Angkor_Wat.jpg/640px-Angkor_Wat.jpg', desc: '树根缠绕的神圣废墟', quote: '内心的宁静，是旅途中最美的风景。' },
+            { id: 18, name: '尼亚加拉瀑布', location: 'Canada/USA', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/3Falls_Niagara.jpg/640px-3Falls_Niagara.jpg', desc: '雷神之水的咆哮', quote: '哪怕坠落，也要发出震耳欲聋的回响。' },
+            { id: 20, name: '巨石阵', location: 'UK 英国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Stonehenge2007_07_30.jpg/640px-Stonehenge2007_07_30.jpg', desc: '史前文明的神秘回响', quote: '世界很大，我们很小，但这不妨碍我们去探索。' },
+        ];
+
+        // --- 组件：手绘图片 ---
+        const SketchImage = ({ src, alt, className }) => {
+            const [error, setError] = useState(false);
+            useEffect(() => { setError(false); }, [src]);
+            return (
+                <div className={`relative overflow-hidden border-4 border-white shadow-md rounded-sm ${className} bg-gray-100`}>
+                    {!error ? (
+                        <img src={src} alt={alt} onError={() => setError(true)} referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform duration-700 hover:scale-110" style={{ filter: 'contrast(120%) sepia(20%) saturate(140%) brightness(1.05) hue-rotate(-5deg)', mixBlendMode: 'multiply' }} />
+                    ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-200 gap-2"><Icons.ImageOff size={24} /><span className="text-xs text-center px-2">{alt}</span></div>
+                    )}
+                    <div className="absolute inset-0 bg-yellow-50 opacity-20 pointer-events-none mix-blend-overlay"></div>
+                </div>
+            );
+        };
+
+        // --- 主组件 ---
+        function App() {
+            const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('ielts_records') || '[]'));
+            const [unlockedLandmarks, setUnlockedLandmarks] = useState(() => JSON.parse(localStorage.getItem('ielts_landmarks') || '[]'));
+            const [mapCycle, setMapCycle] = useState(() => parseInt(localStorage.getItem('ielts_map_cycle') || '1'));
+            const [mapResetDate, setMapResetDate] = useState(() => {
+                const d = localStorage.getItem('ielts_map_reset_date');
+                return d ? new Date(d) : new Date(0); 
+            });
+
+            const [showDataCenter, setShowDataCenter] = useState(false);
+            const [showJournal, setShowJournal] = useState(false);
+            const [showLandmarkModal, setShowLandmarkModal] = useState(false);
+            const [currentLandmark, setCurrentLandmark] = useState(null);
+            const [notification, setNotification] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem('ielts_records', JSON.stringify(records));
+                localStorage.setItem('ielts_landmarks', JSON.stringify(unlockedLandmarks));
+                localStorage.setItem('ielts_map_cycle', mapCycle.toString());
+                localStorage.setItem('ielts_map_reset_date', mapResetDate.toISOString());
+            }, [records, unlockedLandmarks, mapCycle, mapResetDate]);
+
+            const showToast = (text, type = 'info') => {
+                setNotification({ text, type });
+                setTimeout(() => setNotification(null), 3000);
+            };
+
+            const handleAddRecord = (newRecord) => {
+                let recordWithMeta = { ...newRecord };
+                
+                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
+                    const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R'));
+                    const usedCountryIds = activeRecords.map(r => r.countryId).filter(id => id);
+                    const allCountryIds = Object.keys(COUNTRY_CN_MAP);
+                    let availableIds = allCountryIds.filter(id => !usedCountryIds.includes(id));
+                    
+                    if (availableIds.length === 0) {
+                        availableIds = allCountryIds; 
+                    }
+                    
+                    const randomId = availableIds[Math.floor(Math.random() * availableIds.length)];
+                    recordWithMeta.countryId = randomId;
+                } else if (newRecord.subject === 'W' || newRecord.subject === 'S') {
+                    const undiscovered = LANDMARKS.filter(l => !unlockedLandmarks.find(ul => ul.id === l.id));
+                    if (undiscovered.length > 0) {
+                        const newLm = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+                        setUnlockedLandmarks([...unlockedLandmarks, newLm]);
+                        setCurrentLandmark(newLm);
+                        setShowLandmarkModal(true);
+                        recordWithMeta.landmarkId = newLm.id; 
+                    } else {
+                        showToast("太棒了！所有地标已收集完毕！🎉", 'success');
+                    }
+                }
+
+                setRecords([recordWithMeta, ...records]);
+                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
+                    showToast(`地图已点亮：${COUNTRY_CN_MAP[recordWithMeta.countryId]}!`, 'success');
+                }
+            };
+
+            const handleDeleteRecord = (id) => {
+                setRecords(records.filter(r => r.id !== id));
+                showToast("记录已删除，地图状态已更新", 'info');
+            };
+
+            const handleMapReset = () => {
+                if (confirm("🎉 恭喜你点亮了所有国家！确定要开启下一轮探索吗？(历史记录保留，地图颜色重置)")) {
+                    setMapCycle(prev => prev + 1);
+                    setMapResetDate(new Date()); 
+                    showToast(`欢迎来到 World Tour Level ${mapCycle + 1} ! 🚀`, 'success');
+                }
+            };
+
+            const handleShowLandmark = (landmark) => {
+                setCurrentLandmark(landmark);
+                setShowLandmarkModal(true);
+            };
+
+            return (
+                <div className="flex h-screen w-screen overflow-hidden">
+                    <Sidebar onAddRecord={handleAddRecord} onOpenData={() => setShowDataCenter(true)} onOpenJournal={() => setShowJournal(true)} />
+                    <div className="flex-1 relative bg-[#89cff0]">
+                        <HandDrawnMap 
+                            records={records} 
+                            mapResetDate={mapResetDate}
+                            mapCycle={mapCycle}
+                            onMapReset={handleMapReset}
+                            unlockedLandmarks={unlockedLandmarks}
+                            totalLandmarksCount={LANDMARKS.length}
+                            totalCountriesCount={174}
+                            onShowLandmark={handleShowLandmark}
+                        />
+                    </div>
+                    {showDataCenter && <DataCenter records={records} onDeleteRecord={handleDeleteRecord} onClose={() => setShowDataCenter(false)} />}
+                    {showJournal && <Journal records={records} onClose={() => setShowJournal(false)} />}
+                    {showLandmarkModal && currentLandmark && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+                            <div className="relative bg-[#fdfbf7] p-6 shadow-2xl transform rotate-1 max-w-sm w-full flex flex-col items-center">
+                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-32 h-8 bg-yellow-200/80 rotate-1 shadow-sm z-10"></div>
+                                <button onClick={() => setShowLandmarkModal(false)} className="absolute -top-4 -right-4 bg-red-500 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-red-600 transition-colors z-20"><Icons.X size={20} /></button>
+                                <div className="aspect-square w-full mb-4 relative group bg-white p-2 shadow-sm border border-gray-200">
+                                    <SketchImage src={currentLandmark.img} alt={currentLandmark.name} className="w-full h-full" />
+                                </div>
+                                <h2 className="text-3xl font-bold text-[#2c3e50] text-center mb-1" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.name}</h2>
+                                <div className="flex justify-center items-center gap-2 text-gray-500 text-sm mb-4"><Icons.MapPin size={14} /> {currentLandmark.location}</div>
+                                <p className="text-center text-gray-600 font-serif italic text-sm mb-4 px-2">"{currentLandmark.desc}"</p>
+                                <div className="w-full border-t-2 border-dashed border-gray-300 pt-4 mt-2">
+                                    <div className="flex gap-2 text-gray-400 mb-1 justify-center"><Icons.Quote size={16} className="transform rotate-180"/></div>
+                                    <p className="text-center text-[#e1685a] font-hand font-medium text-lg leading-relaxed" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.quote}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {notification && (
+                        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
+                            <div className="bg-[#2c3e50] text-white px-6 py-3 rounded-full shadow-2xl animate-bounce flex items-center gap-3 border-2 border-white">
+                                {notification.type === 'error' ? <Icons.X size={18} /> : <Icons.MapPin size={18} className="text-[#e6b32e]" />}
+                                <span className="font-bold">{notification.text}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- Sidebar ---
+        function Sidebar({ onAddRecord, onOpenData, onOpenJournal }) {
+            const [form, setForm] = useState({ book: 'Cam 20', test: 'Test 1', subject: 'L', part: 'S1', score: '', topic: '', tags: [], note: '' });
+            const [daysLeft, setDaysLeft] = useState(0);
+            const [customTag, setCustomTag] = useState('');
+            const [showCustomTagInput, setShowCustomTagInput] = useState(false);
+
+            useEffect(() => {
+                const diff = Math.ceil((TARGET_DATE - new Date()) / (1000*60*60*24));
+                setDaysLeft(diff > 0 ? diff : 0);
+            }, []);
+
+            const updateField = (f, v) => setForm(prev => ({ ...prev, [f]: v }));
+            const toggleTag = (tag) => {
+                setForm(prev => {
+                    const newTags = prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag];
+                    return { ...prev, tags: newTags };
+                });
+            };
+
+            const addCustomTag = () => {
+                if (customTag.trim()) {
+                    toggleTag(customTag.trim());
+                    setCustomTag('');
+                    setShowCustomTagInput(false);
+                }
+            };
+
+            const handleSubmit = () => {
+                if (!form.score && form.score !== 0) return alert('请填写分数/对题数');
+                onAddRecord({ ...form, id: Date.now(), date: new Date().toISOString().split('T')[0] });
+                setForm(prev => ({ ...prev, score: '', topic: '', tags: [], note: '' }));
+            };
+
+            const books = Array.from({length: 20}, (_, i) => `Cam ${20-i}`).concat(Array.from({length: 9}, (_, i) => `机经 ${9-i}`));
+            const currentConfig = SUBJECT_CONFIG[form.subject];
+
+            return (
+                <div className="w-[380px] h-full bg-white border-r border-gray-300 flex flex-col shadow-xl z-20">
+                    <div className="p-6 border-b-2 border-[#2c3e50] flex items-center gap-2">
+                        <Icons.Compass size={28} className="text-[#2c3e50]" />
+                        <h1 className="text-2xl font-black tracking-tighter text-[#2c3e50]">IELTS ATLAS</h1>
+                    </div>
+                    <div className="p-4 bg-[#2c3e50] text-white mx-4 mt-4 rounded-md flex justify-between items-center font-mono shadow-md">
+                        <span className="text-xs tracking-widest opacity-80">MISSION DEADLINE</span>
+                        <span className="text-xl font-bold text-[#f1c40f]">{daysLeft} DAYS</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                        <div className="flex gap-3">
+                            <div className="flex-1"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Source</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.book} onChange={e=>updateField('book', e.target.value)}>{books.map(b => <option key={b}>{b}</option>)}</select></div>
+                            <div className="w-24"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Test</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.test} onChange={e=>updateField('test', e.target.value)}>{['Test 1','Test 2','Test 3','Test 4'].map(t => <option key={t}>{t}</option>)}</select></div>
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="flex-1"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Subject</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm font-bold" style={{ color: currentConfig.color }} value={form.subject} onChange={e=>updateField('subject', e.target.value)}>{Object.entries(SUBJECT_CONFIG).map(([k, v]) => (<option key={k} value={k}>{v.icon} {v.label}</option>))}</select></div>
+                            <div className="w-24"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Part</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.part} onChange={e=>updateField('part', e.target.value)}>{currentConfig.parts.map(p => <option key={p}>{p}</option>)}</select></div>
+                        </div>
+                        <div><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Score / Count</label><input type="number" step="0.5" className="w-full p-3 border-2 border-gray-200 rounded text-lg font-bold text-[#2c3e50] focus:border-[#3498db] outline-none" placeholder="e.g. 7.5 or 32" value={form.score} onChange={e=>updateField('score', e.target.value)} /></div>
+                        {(form.subject === 'W' || form.subject === 'S') && (<div className="animate-in fade-in slide-in-from-top-2 duration-300"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Topic 话题</label><input type="text" className="w-full p-2 border border-gray-300 rounded text-sm" placeholder="e.g. Technology..." value={form.topic} onChange={e=>updateField('topic', e.target.value)} /></div>)}
+                        <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                            <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Diagnosis</label>
+                            <div className="flex flex-wrap gap-2">
+                                {DIAGNOSIS_TAGS[form.subject].map(tag => (
+                                    <button key={tag} onClick={() => toggleTag(tag)} className={`px-2 py-1 rounded-full text-xs border transition-all ${form.tags.includes(tag) ? 'bg-[#2c3e50] text-white border-[#2c3e50]' : 'bg-white text-gray-500 border-gray-300 hover:border-[#2c3e50]'}`}>{tag}</button>
+                                ))}
+                                {form.tags.filter(t => !DIAGNOSIS_TAGS[form.subject].includes(t)).map(tag => (
+                                    <button key={tag} onClick={() => toggleTag(tag)} className="px-2 py-1 rounded-full text-xs border transition-all bg-[#2c3e50] text-white border-[#2c3e50]">{tag}</button>
+                                ))}
+                                {showCustomTagInput ? (
+                                    <div className="flex items-center gap-1">
+                                        <input type="text" className="w-20 px-2 py-1 text-xs border border-gray-300 rounded" autoFocus placeholder="自定义..." value={customTag} onChange={e => setCustomTag(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustomTag()} />
+                                        <button onClick={addCustomTag} className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">✓</button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => setShowCustomTagInput(true)} className="px-2 py-1 rounded-full text-xs border border-dashed border-gray-400 text-gray-500 hover:bg-gray-100">+ 自定义</button>
+                                )}
+                            </div>
+                        </div>
+                        <div><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Journal Note</label><textarea className="w-full p-2 border border-gray-300 rounded text-sm h-20 resize-none paper-texture" placeholder="记录今日心得..." value={form.note} onChange={e=>updateField('note', e.target.value)}></textarea></div>
+                        <button onClick={handleSubmit} className="w-full bg-[#2c3e50] hover:bg-[#34495e] text-white font-bold py-4 rounded-lg shadow-lg transform active:scale-95 transition-all flex justify-center items-center gap-2"><Icons.Pen size={18} /> 记录并探索 (PAINT)</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-px bg-gray-300 border-t border-gray-300">
+                        <button onClick={onOpenJournal} className="bg-gray-50 hover:bg-white p-4 text-sm font-bold text-gray-600 flex justify-center items-center gap-2"><Icons.Book size={16} /> 复盘手账</button>
+                        <button onClick={onOpenData} className="bg-white hover:bg-gray-50 p-4 text-sm font-bold text-[#3498db] flex justify-center items-center gap-2"><Icons.Chart size={16} /> 数据中心</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function DataCenter({ records, onDeleteRecord, onClose }) {
+            const [activeTab, setActiveTab] = useState('L');
+            const [activePartFilter, setActivePartFilter] = useState('All');
+            const [viewMode, setViewMode] = useState('list');
+            const canvasRef = useRef(null);
+            const pieCanvasRef = useRef(null);
+            const chartInstance = useRef(null);
+            const pieInstance = useRef(null);
+
+            const config = SUBJECT_CONFIG[activeTab];
+            const filteredRecords = records.filter(r => {
+                if (r.subject !== activeTab) return false;
+                if (activePartFilter !== 'All' && r.part !== activePartFilter) return false;
+                return true;
+            });
+
+            const handleSwitchTab = (tab) => { setActiveTab(tab); setActivePartFilter('All'); };
+            const avgScore = useMemo(() => {
+                if(filteredRecords.length === 0) return '-';
+                const sum = filteredRecords.reduce((acc, r) => acc + parseFloat(r.score), 0);
+                return (sum / filteredRecords.length).toFixed(1);
+            }, [filteredRecords]);
+
+            useEffect(() => {
+                if (canvasRef.current) {
+                    if (chartInstance.current) chartInstance.current.destroy();
+                    const ctx = canvasRef.current.getContext('2d');
+                    const sortedData = [...filteredRecords].reverse().slice(-15);
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: sortedData.map(r => r.date.slice(5)),
+                            datasets: [{ label: 'Score Trend', data: sortedData.map(r => r.score), borderColor: config.color, backgroundColor: config.color + '20', fill: true, tension: 0.4 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
+                    });
+                }
+                if (pieCanvasRef.current) {
+                    if (pieInstance.current) pieInstance.current.destroy();
+                    const tagCounts = {};
+                    filteredRecords.forEach(r => { r.tags.forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }); });
+                    const labels = Object.keys(tagCounts);
+                    const data = Object.values(tagCounts);
+                    if (labels.length > 0) {
+                        const pieCtx = pieCanvasRef.current.getContext('2d');
+                        pieInstance.current = new Chart(pieCtx, {
+                            type: 'doughnut',
+                            data: { labels: labels, datasets: [{ data: data, backgroundColor: ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#95a5a6'], borderWidth: 0 }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: {size: 10} } } } }
+                        });
+                    }
+                }
+                return () => { if(chartInstance.current) chartInstance.current.destroy(); if(pieInstance.current) pieInstance.current.destroy(); };
+            }, [activeTab, filteredRecords, config]);
+
+            const groupedRecords = useMemo(() => {
+                if (viewMode !== 'grouped') return null;
+                const groups = {};
+                filteredRecords.forEach(r => { if (!groups[r.book]) groups[r.book] = []; groups[r.book].push(r); });
+                return groups;
+            }, [filteredRecords, viewMode]);
+
+            return (
+                <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center backdrop-blur-sm p-4">
+                    <div className="bg-white w-full max-w-5xl h-[85vh] rounded-xl shadow-2xl flex overflow-hidden">
+                        <div className="w-48 bg-gray-100 flex flex-col border-r border-gray-200">
+                            <div className="p-6 font-black text-xl text-gray-700 tracking-tighter">DATA CENTER</div>
+                            {Object.entries(SUBJECT_CONFIG).map(([k, v]) => (
+                                <button key={k} onClick={() => handleSwitchTab(k)} className={`p-4 text-left font-bold transition-all border-l-4 ${activeTab === k ? 'bg-white text-gray-800 border-[#2c3e50]' : 'text-gray-400 border-transparent hover:bg-gray-200'}`}>{v.icon} {v.label.split(' ')[1]}</button>
+                            ))}
+                            <button onClick={onClose} className="mt-auto p-4 text-gray-500 hover:text-gray-800 flex items-center gap-2 font-bold text-sm border-t border-gray-200"><Icons.RotateCcw size={16}/> 返回地图</button>
+                        </div>
+                        <div className="flex-1 p-8 overflow-y-auto bg-white">
+                            <div className="flex justify-between items-end border-b border-gray-200 pb-4 mb-6">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2" style={{ color: config.color }}>{config.icon} {config.label}</h2>
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={() => setActivePartFilter('All')} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${activePartFilter === 'All' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>全部</button>
+                                        {config.parts.map(p => (
+                                            <button key={p} onClick={() => setActivePartFilter(p)} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${activePartFilter === p ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{p}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex gap-6 text-center">
+                                    <div><div className="text-3xl font-black text-gray-700">{filteredRecords.length}</div><div className="text-xs font-bold text-gray-400 uppercase">Sessions</div></div>
+                                    <div><div className="text-3xl font-black text-gray-700">{avgScore}</div><div className="text-xs font-bold text-gray-400 uppercase">Avg Score</div></div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-12 gap-6 mb-8">
+                                <div className="col-span-8 bg-gray-50 p-4 rounded-xl border border-gray-100 h-64 relative shadow-sm">
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Score Trend 成绩走势 {activePartFilter !== 'All' && `(${activePartFilter})`}</h3>
+                                    <div className="h-52 w-full">{filteredRecords.length > 0 ? <canvas ref={canvasRef} /> : <div className="h-full flex items-center justify-center text-gray-400 italic">暂无数据</div>}</div>
+                                </div>
+                                <div className="col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-100 h-64 relative shadow-sm">
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Diagnosis 错误归因</h3>
+                                    <div className="h-52 w-full">{filteredRecords.length > 0 ? <canvas ref={pieCanvasRef} /> : <div className="h-full flex items-center justify-center text-gray-400 italic">暂无数据</div>}</div>
+                                </div>
+                            </div>
+                            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                    <h3 className="font-bold text-gray-600 text-sm">练习记录</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setViewMode('list')} className={`p-1 rounded ${viewMode==='list'?'bg-white shadow text-[#2c3e50]':'text-gray-400'}`} title="列表视图"><Icons.List size={16}/></button>
+                                        <button onClick={() => setViewMode('grouped')} className={`p-1 rounded ${viewMode==='grouped'?'bg-white shadow text-[#2c3e50]':'text-gray-400'}`} title="按书本归类"><Icons.Layers size={16}/></button>
+                                    </div>
+                                </div>
+                                {viewMode === 'list' ? (
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 text-gray-500 border-b border-gray-200"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Source</th><th className="p-3 text-left">Score</th>{(activeTab === 'W' || activeTab === 'S') && <th className="p-3 text-left">Topic</th>}<th className="p-3 text-left">Tags</th><th className="p-3 w-10"></th></tr></thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {filteredRecords.slice(0, 10).map((r) => (
+                                                <tr key={r.id} className="hover:bg-gray-50">
+                                                    <td className="p-3 font-mono text-gray-500">{r.date.slice(5)}</td>
+                                                    <td className="p-3 font-medium">{r.book} {r.test} <span className="text-xs bg-gray-200 px-1 rounded ml-1">{r.part}</span></td>
+                                                    <td className="p-3 font-bold text-gray-800">{r.score}</td>
+                                                    {(activeTab === 'W' || activeTab === 'S') && <td className="p-3 text-gray-600 truncate max-w-[150px]">{r.topic || '-'}</td>}
+                                                    <td className="p-3"><div className="flex gap-1 flex-wrap">{r.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 text-gray-500">{t}</span>)}</div></td>
+                                                    <td className="p-3 text-center"><button onClick={() => onDeleteRecord(r.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="删除记录"><Icons.Trash size={16} /></button></td>
+                                                </tr>
+                                            ))}
+                                            {filteredRecords.length > 10 && <tr><td colSpan="6" className="p-3 text-center text-gray-400 text-xs bg-gray-50">... 仅显示最近 10 条，请切换视图查看更多 ...</td></tr>}
+                                            {filteredRecords.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-gray-400 italic">暂无练习记录</td></tr>}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="p-4 space-y-4">
+                                        {Object.entries(groupedRecords).map(([book, recs]) => (
+                                            <div key={book} className="border border-gray-200 rounded-lg overflow-hidden">
+                                                <div className="bg-gray-100 p-2 font-bold text-gray-700 text-sm flex justify-between">
+                                                    <span>{book}</span>
+                                                    <span className="text-gray-400 font-normal text-xs">{recs.length} records</span>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-2 bg-gray-50/50">
+                                                    {recs.map(r => (
+                                                        <div key={r.id} className="bg-white p-2 rounded border border-gray-100 text-xs flex justify-between items-center group relative">
+                                                            <span className="font-medium text-gray-600">{r.test} {r.part}</span>
+                                                            <div className="flex gap-2 items-center">
+                                                                <span className="font-bold text-[#2c3e50]">{r.score}</span>
+                                                                <button onClick={() => onDeleteRecord(r.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.Trash size={14}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {Object.keys(groupedRecords).length === 0 && <div className="text-center text-gray-400 italic p-4">暂无数据</div>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function Journal({ records, onClose }) {
+            const notes = records.filter(r => r.note);
+            return (
+                <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center backdrop-blur-sm p-4">
+                    <div className="bg-[#fffbf0] w-full max-w-2xl h-[80vh] rounded shadow-2xl flex flex-col relative paper-texture border-l-8 border-[#5d4037]">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><Icons.X size={24} /></button>
+                        <div className="p-8 border-b border-[#e0e0e0]"><h2 className="text-2xl font-serif font-bold text-[#5d4037] flex items-center gap-2"><Icons.Book size={24} /> Captain's Log 备考手账</h2></div>
+                        <div className="flex-1 overflow-y-auto p-8">{notes.length === 0 ? (<div className="text-center text-gray-400 italic mt-20">还没有写下任何心得...</div>) : (<div className="space-y-8">{notes.map(r => (<div key={r.id} className="relative pl-6 border-l-2 border-[#e67e22]"><div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-[#e67e22] border-4 border-[#fffbf0]"></div><div className="text-xs font-mono text-gray-400 mb-1">{r.date} • {r.subject}</div><div className="text-[#2c3e50] leading-relaxed whitespace-pre-wrap font-serif">{r.note}</div><div className="mt-2 flex gap-2"><span className="text-[10px] bg-[#e0e0e0] px-2 rounded text-gray-600">{r.book} {r.test}</span>{r.score && <span className="text-[10px] bg-[#e0e0e0] px-2 rounded text-gray-600">Score: {r.score}</span>}</div></div>))}</div>)}</div>
+                    </div>
+                </div>
+            );
+        }
+
+        function HandDrawnMap({ records, mapResetDate, mapCycle, onMapReset, unlockedLandmarks, totalLandmarksCount, totalCountriesCount, onShowLandmark }) {
+            const [mapFeatures, setMapFeatures] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(false);
+            // 调整初始缩放和偏移，让地图默认显示更全
+            const [transform, setTransform] = useState({ k: 0.75, x: 100, y: 50 });
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+            const [retryCount, setRetryCount] = useState(0);
+            const [hoveredCountry, setHoveredCountry] = useState(null); // Tooltip state
+            const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
+            useEffect(() => {
+                setLoading(true); setError(false);
+                fetch(GEOJSON_URL).then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); }).then(data => { setMapFeatures(data.features); setLoading(false); }).catch(err => { console.error(err); setLoading(false); setError(true); });
+            }, [retryCount]);
+
+            const project = (lon, lat) => { const width = 800; const height = 450; const x = (lon + 180) * (width / 360); const y = height - ((lat + 90) * (height / 180)); return [x, y]; };
+            const generatePath = (feature) => {
+                const type = feature.geometry.type; const coords = feature.geometry.coordinates;
+                const drawPoly = (rings) => { let p = ""; rings.forEach(ring => { ring.forEach((pt, i) => { const [x, y] = project(pt[0], pt[1]); p += (i === 0 ? "M" : "L") + `${x},${y} `; }); p += "Z "; }); return p; };
+                if (type === "Polygon") return drawPoly(coords); else if (type === "MultiPolygon") { let p = ""; coords.forEach(poly => p += drawPoly(poly)); return p; } return "";
+            };
+
+            const mapData = useMemo(() => {
+                const statusMap = {}; 
+                const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R') && r.countryId);
+                
+                activeRecords.forEach(r => {
+                    if (!statusMap[r.countryId] || parseFloat(r.score) > parseFloat(statusMap[r.countryId].record.score)) {
+                        statusMap[r.countryId] = { record: r };
+                    }
+                });
+
+                return mapFeatures.map((f, i) => {
+                    const recordInfo = statusMap[f.id];
+                    let statusClass = 'fill-default';
+                    if (recordInfo) {
+                        const s = parseFloat(recordInfo.record.score);
+                        if (s >= 8.0 || s >= 35) statusClass = 'fill-high';
+                        else if ((s >= 7.0 && s < 8.0) || (s >= 30 && s < 35)) statusClass = 'fill-mid'; 
+                        else if ((s >= 6.0 && s < 7.0) || (s >= 23 && s < 30)) statusClass = 'fill-pass'; 
+                        else statusClass = 'fill-low';
+                    }
+                    
+                    return {
+                        id: f.id,
+                        name: f.properties.name,
+                        cnName: COUNTRY_CN_MAP[f.id] || '',
+                        d: generatePath(f),
+                        statusClass,
+                        record: recordInfo ? recordInfo.record : null
+                    };
+                });
+            }, [mapFeatures, records, mapResetDate]);
+
+            const litCountriesCount = mapData.filter(c => c.statusClass !== 'fill-default').length;
+            const isMapFull = litCountriesCount > 0 && litCountriesCount === totalCountriesCount;
+
+            const handleWheel = (e) => { e.preventDefault(); const newK = Math.min(Math.max(e.deltaY < 0 ? transform.k * 1.1 : transform.k / 1.1, 1), 8); setTransform(p => ({ ...p, k: newK })); };
+            const handleMouseDown = (e) => { setIsDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); };
+            const handleMouseMove = (e) => {
+                if (isDragging) {
+                    setTransform(p => ({ ...p, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }));
+                }
+            };
+            const handlePathHover = (e, country) => {
+                if (country.record) {
+                    const rect = e.target.getBoundingClientRect();
+                    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top - 10 });
+                    setHoveredCountry(country);
+                } else {
+                    setHoveredCountry(null);
+                }
+            };
+
+            return (
+                <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-[#89cff0]"> 
+                    
+                    {/* HUD - 1:1 REPLICA */}
+                    <div className="absolute top-6 left-6 z-20 flex gap-4 font-['Inter']">
+                        {/* Card 1: World Exploration */}
+                        <div className="hud-card">
+                            <div className="hud-header">
+                                <span>WORLD EXPLORATION</span>
+                                <span className="hud-level">Level {mapCycle}</span>
+                            </div>
+                            <div className="hud-progress-bg">
+                                <div className="hud-progress-bar" style={{ width: `${(litCountriesCount / totalCountriesCount) * 100}%` }}></div>
+                            </div>
+                            <div className="hud-value">
+                                {litCountriesCount} / {totalCountriesCount} Countries
+                            </div>
+                             {isMapFull && <button onClick={onMapReset} className="text-[10px] text-red-500 font-bold mt-1 animate-pulse hover:underline text-right block w-full">LEVEL UP &gt;</button>}
+                        </div>
+
+                        {/* Card 2: Landmark Collection */}
+                        <div className="hud-card">
+                            <div className="hud-header">
+                                <span>LANDMARK COLLECTION</span>
+                                <Icons.Trophy size={16} className="hud-trophy" />
+                            </div>
+                            <div className="hud-progress-bg">
+                                <div className="hud-progress-bar bg-[#EAB308]" style={{ width: `${(unlockedLandmarks.length / totalLandmarksCount) * 100}%` }}></div>
+                            </div>
+                            <div className="hud-value text-left">
+                                {unlockedLandmarks.length} / {totalLandmarksCount} Collected
+                            </div>
+                        </div>
+                    </div>
+
+                    <svg className="absolute w-0 h-0"><defs><filter id="wavy"><feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" result="noise" /><feDisplacementMap in="SourceGraphic" in2="noise" scale="2" /></filter><pattern id="pencil-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d4ac0d" strokeWidth="2" /></pattern></defs></svg>
+                    
+                    {/* Controls */}
+                    <div className="absolute bottom-56 right-8 z-10 flex flex-col gap-2"><button onClick={() => setTransform(p => ({ ...p, k: Math.min(p.k * 1.2, 8) }))} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Plus size={20}/></button><button onClick={() => setTransform(p => ({ ...p, k: Math.max(p.k / 1.2, 1) }))} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Minus size={20}/></button><button onClick={() => setTransform({ k: 0.75, x: 100, y: 50 })} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Refresh size={20}/></button>{error && <button onClick={() => setRetryCount(c => c + 1)} className="bg-red-100 text-red-600 p-2 rounded shadow animate-pulse"><Icons.Refresh size={20}/></button>}</div>
+                    
+                    {/* Bottom Shelf - ENLARGED (h-52, w-40) */}
+                    <div className="absolute bottom-0 left-0 w-full h-52 bg-gradient-to-t from-white/30 to-transparent z-20 flex items-center px-8 gap-10 overflow-x-auto scrollbar-hide pb-4 pt-2">
+                        {unlockedLandmarks.length === 0 && <div className="text-white/80 text-xl italic w-full text-center font-bold tracking-widest drop-shadow-md">完成写作/口语练习来解锁地标收藏...</div>}
+                        {unlockedLandmarks.map((lm, i) => (
+                            <div key={i} onClick={() => onShowLandmark(lm)} className="flex-shrink-0 w-40 h-48 bg-white shadow-2xl p-2 cursor-pointer hover:scale-110 transition-all duration-300 stamp-card transform rotate-1 hover:rotate-0" title={lm.name}>
+                                <div className="w-full h-full overflow-hidden rounded-sm border border-gray-100 relative">
+                                     <img src={lm.img} className="w-full h-full object-cover" />
+                                     <div className="absolute bottom-0 left-0 w-full bg-white/90 p-2 text-center text-sm font-bold text-gray-600 truncate">{lm.name}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {loading ? (<div className="flex flex-col items-center text-white/50 gap-2"><Icons.Loader className="animate-spin" size={32} /><p>Drawing World Map...</p></div>) : error ? (<div className="text-white/50">Map Data Error</div>) : (
+                        <>
+                            <svg viewBox="0 0 800 450" className={`w-full h-full transition-cursor ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={() => setIsDragging(false)} onMouseLeave={() => {setIsDragging(false); setHoveredCountry(null);}}>
+                                <pattern id="waves" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M0 10 Q5 5 10 10 T20 10" fill="none" stroke="#ffffff" strokeWidth="1" opacity="0.3"/></pattern>
+                                <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}><rect x="-4000" y="-4000" width="8000" height="8000" fill="url(#waves)" /><g transform="translate(0, 50) scale(1, 0.85)">
+                                    {mapData.map((c, i) => (
+                                        <g key={i} className="group" onMouseEnter={(e) => handlePathHover(e, c)} onMouseLeave={() => setHoveredCountry(null)}>
+                                            <path d={c.d} className={`transition-colors duration-500 ease-out ${c.statusClass}`} vectorEffect="non-scaling-stroke" style={{ filter: 'url(#wavy)' }} />
+                                            {c.statusClass !== 'fill-default' && <path d={c.d} fill="url(#pencil-hatch)" opacity="0.3" style={{ pointerEvents: 'none' }} />}
+                                        </g>
+                                    ))}
+                                </g></g>
+                            </svg>
+                            {hoveredCountry && (
+                                <div className="fixed z-50 bg-white p-3 rounded-lg shadow-xl border-l-4 border-[#2c3e50] text-sm pointer-events-none tooltip-enter" style={{ left: tooltipPos.x, top: tooltipPos.y }}>
+                                    <div className="font-bold text-gray-800">🎉 恭喜点亮 {hoveredCountry.cnName} ({hoveredCountry.name})</div>
+                                    <div className="text-xs text-gray-500 mt-1">📅 {hoveredCountry.record.date}</div>
+                                    <div className="text-xs font-mono text-blue-600 mt-1">📚 {hoveredCountry.record.book} {hoveredCountry.record.test} {hoveredCountry.record.part}</div>
+                                    <div className="text-xs font-bold text-[#f1c40f] mt-1">Score: {hoveredCountry.record.score}</div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
