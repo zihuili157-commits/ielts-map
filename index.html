@@ -127,11 +127,13 @@
             Layers: (p) => <IconWrapper {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconWrapper>,
             List: (p) => <IconWrapper {...p}><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></IconWrapper>,
             Trash: (p) => <IconWrapper {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconWrapper>,
-            Trophy: (p) => <IconWrapper {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconWrapper>
+            Trophy: (p) => <IconWrapper {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconWrapper>,
+            Edit: (p) => <IconWrapper {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></IconWrapper>
         };
 
         const GEOJSON_URL = 'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson';
-        const TARGET_DATE = new Date('2025-12-28');
+        // 默认目标日期，可被 localStorage 覆盖
+        const DEFAULT_TARGET_DATE = '2025-12-28';
 
         const SUBJECT_CONFIG = {
             'L': { label: 'Listening 听力', icon: '🎧', color: '#3498db', parts: ['S1', 'S2', 'S3', 'S4'] },
@@ -147,7 +149,7 @@
             'S': ['发音不准', '流利度', '词汇重复', '语法错误', '卡顿', '时态错误', '回答太短', '逻辑不清']
         };
 
-        // 174个国家/地区映射 (已移除 ATA, ATF)
+        // 174个国家/地区映射
         const COUNTRY_CN_MAP = {
             'AFG': '阿富汗', 'AGO': '安哥拉', 'ALB': '阿尔巴尼亚', 'ARE': '阿联酋', 'ARG': '阿根廷', 'ARM': '亚美尼亚', 'AUS': '澳大利亚', 'AUT': '奥地利', 'AZE': '阿塞拜疆',
             'BDI': '布隆迪', 'BEL': '比利时', 'BEN': '贝宁', 'BFA': '布基纳法索', 'BGD': '孟加拉国', 'BGR': '保加利亚', 'BHS': '巴哈马', 'BIH': '波黑', 'BLR': '白俄罗斯', 'BLZ': '伯利兹', 'BOL': '玻利维亚', 'BRA': '巴西', 'BRN': '文莱', 'BTN': '不丹', 'BWA': '博茨瓦纳',
@@ -175,7 +177,7 @@
             'ZAF': '南非', 'ZMB': '赞比亚', 'ZWE': '津巴布韦'
         };
 
-        // 16个稳定地标 (删除4个问题项)
+        // 16个稳定地标
         const LANDMARKS = [
             { id: 1, name: '新天鹅堡', location: 'Germany 德国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Schloss_Neuschwanstein_2013.jpg/800px-Schloss_Neuschwanstein_2013.jpg', desc: '迪士尼城堡的原型', quote: '每个人的心中，都住着一个童话。' },
             { id: 2, name: '自由女神像', location: 'USA 美国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Statue_of_Liberty_7.jpg/640px-Statue_of_Liberty_7.jpg', desc: '照耀世界的自由之光', quote: '读万卷书，行万里路。' },
@@ -194,6 +196,89 @@
             { id: 18, name: '尼亚加拉瀑布', location: 'Canada/USA', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/3Falls_Niagara.jpg/640px-3Falls_Niagara.jpg', desc: '雷神之水的咆哮', quote: '哪怕坠落，也要发出震耳欲聋的回响。' },
             { id: 20, name: '巨石阵', location: 'UK 英国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Stonehenge2007_07_30.jpg/640px-Stonehenge2007_07_30.jpg', desc: '史前文明的神秘回响', quote: '世界很大，我们很小，但这不妨碍我们去探索。' },
         ];
+
+        // --- 工具函数：分数计算 ---
+        // 雅思官方评分对照表 (Academic)
+        const getBandScore = (count, type) => {
+            const c = parseInt(count);
+            if (isNaN(c)) return 0;
+            
+            if (type === 'L' || type === 'R') {
+                // Listening and Reading (Academic) roughly share similar scaling for bands 6-9
+                // Standard IELTS 40 questions scale
+                if (c >= 39) return 9.0;
+                if (c >= 37) return 8.5;
+                if (c >= 35) return 8.0;
+                if (c >= 32) return 7.5; // L: 32, R: 33 usually, simplifying slightly or being lenient
+                if (c >= 30) return 7.0;
+                if (c >= 26) return 6.5; // L: 26, R: 27
+                if (c >= 23) return 6.0;
+                if (c >= 18) return 5.5; // L: 18, R: 19
+                if (c >= 16) return 5.0; // L: 16, R: 15
+                if (c >= 13) return 4.5;
+                if (c >= 10) return 4.0;
+                return 3.5;
+            }
+            return parseFloat(count) || 0; // W/S 直接返回分数
+        };
+
+        // 聚合函数：将 S1/S2/S3/S4 聚合为整套题
+        const processTestStats = (records, subject) => {
+            if (subject !== 'L' && subject !== 'R') {
+                // 口语写作直接取平均
+                const validRecords = records.filter(r => r.subject === subject);
+                const avg = validRecords.length ? (validRecords.reduce((a, b) => a + parseFloat(b.score), 0) / validRecords.length).toFixed(1) : '-';
+                const trend = validRecords.sort((a,b) => new Date(a.date) - new Date(b.date)).map(r => ({ label: `${r.date.slice(5)}`, value: r.score }));
+                return { avg, trend, count: validRecords.length };
+            }
+
+            // 听力阅读聚合逻辑
+            const groups = {};
+            records.filter(r => r.subject === subject).forEach(r => {
+                const key = `${r.book}|${r.test}`; // Key: Cam 18|Test 1
+                if (!groups[key]) groups[key] = { parts: {}, date: r.date, book: r.book, test: r.test };
+                groups[key].parts[r.part] = parseFloat(r.score); 
+                // 更新日期为最近的一次练习
+                if (new Date(r.date) > new Date(groups[key].date)) groups[key].date = r.date;
+            });
+
+            const completedTests = [];
+            Object.values(groups).forEach(g => {
+                const parts = g.parts;
+                let totalCorrect = 0;
+                let isComplete = false;
+
+                if (subject === 'L') {
+                    // 需要 S1, S2, S3, S4
+                    if (parts['S1']!=null && parts['S2']!=null && parts['S3']!=null && parts['S4']!=null) {
+                        totalCorrect = parts['S1'] + parts['S2'] + parts['S3'] + parts['S4'];
+                        isComplete = true;
+                    }
+                } else if (subject === 'R') {
+                    // 需要 P1, P2, P3
+                    if (parts['P1']!=null && parts['P2']!=null && parts['P3']!=null) {
+                        totalCorrect = parts['P1'] + parts['P2'] + parts['P3'];
+                        isComplete = true;
+                    }
+                }
+
+                if (isComplete) {
+                    completedTests.push({
+                        label: `${g.book} ${g.test}`,
+                        date: g.date,
+                        value: getBandScore(totalCorrect, subject), // 转换为 Band Score
+                        rawTotal: totalCorrect
+                    });
+                }
+            });
+
+            // 按日期排序
+            completedTests.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const avg = completedTests.length ? (completedTests.reduce((a, b) => a + b.value, 0) / completedTests.length).toFixed(1) : '-';
+            return { avg, trend: completedTests, count: completedTests.length };
+        };
+
 
         // --- 组件：手绘图片 ---
         const SketchImage = ({ src, alt, className }) => {
@@ -220,6 +305,7 @@
                 const d = localStorage.getItem('ielts_map_reset_date');
                 return d ? new Date(d) : new Date(0); 
             });
+            const [targetDateStr, setTargetDateStr] = useState(() => localStorage.getItem('ielts_target_date') || DEFAULT_TARGET_DATE);
 
             const [showDataCenter, setShowDataCenter] = useState(false);
             const [showJournal, setShowJournal] = useState(false);
@@ -232,7 +318,8 @@
                 localStorage.setItem('ielts_landmarks', JSON.stringify(unlockedLandmarks));
                 localStorage.setItem('ielts_map_cycle', mapCycle.toString());
                 localStorage.setItem('ielts_map_reset_date', mapResetDate.toISOString());
-            }, [records, unlockedLandmarks, mapCycle, mapResetDate]);
+                localStorage.setItem('ielts_target_date', targetDateStr);
+            }, [records, unlockedLandmarks, mapCycle, mapResetDate, targetDateStr]);
 
             const showToast = (text, type = 'info') => {
                 setNotification({ text, type });
@@ -274,8 +361,19 @@
             };
 
             const handleDeleteRecord = (id) => {
-                setRecords(records.filter(r => r.id !== id));
-                showToast("记录已删除，地图状态已更新", 'info');
+                const recordToDelete = records.find(r => r.id === id);
+                const newRecords = records.filter(r => r.id !== id);
+                setRecords(newRecords);
+
+                // Check landmark link
+                if (recordToDelete && recordToDelete.landmarkId) {
+                    const isStillUsed = newRecords.some(r => r.landmarkId === recordToDelete.landmarkId);
+                    if (!isStillUsed) {
+                        setUnlockedLandmarks(prev => prev.filter(l => l.id !== recordToDelete.landmarkId));
+                        showToast("关联地标已重新锁定", 'info');
+                    }
+                }
+                showToast("记录已删除", 'info');
             };
 
             const handleMapReset = () => {
@@ -293,7 +391,13 @@
 
             return (
                 <div className="flex h-screen w-screen overflow-hidden">
-                    <Sidebar onAddRecord={handleAddRecord} onOpenData={() => setShowDataCenter(true)} onOpenJournal={() => setShowJournal(true)} />
+                    <Sidebar 
+                        onAddRecord={handleAddRecord} 
+                        onOpenData={() => setShowDataCenter(true)} 
+                        onOpenJournal={() => setShowJournal(true)} 
+                        targetDateStr={targetDateStr}
+                        setTargetDateStr={setTargetDateStr}
+                    />
                     <div className="flex-1 relative bg-[#89cff0]">
                         <HandDrawnMap 
                             records={records} 
@@ -339,16 +443,18 @@
         }
 
         // --- Sidebar ---
-        function Sidebar({ onAddRecord, onOpenData, onOpenJournal }) {
+        function Sidebar({ onAddRecord, onOpenData, onOpenJournal, targetDateStr, setTargetDateStr }) {
             const [form, setForm] = useState({ book: 'Cam 20', test: 'Test 1', subject: 'L', part: 'S1', score: '', topic: '', tags: [], note: '' });
             const [daysLeft, setDaysLeft] = useState(0);
             const [customTag, setCustomTag] = useState('');
             const [showCustomTagInput, setShowCustomTagInput] = useState(false);
+            const [isEditingDate, setIsEditingDate] = useState(false);
+            const [tempDate, setTempDate] = useState(targetDateStr);
 
             useEffect(() => {
-                const diff = Math.ceil((TARGET_DATE - new Date()) / (1000*60*60*24));
+                const diff = Math.ceil((new Date(targetDateStr) - new Date()) / (1000*60*60*24));
                 setDaysLeft(diff > 0 ? diff : 0);
-            }, []);
+            }, [targetDateStr]);
 
             const updateField = (f, v) => setForm(prev => ({ ...prev, [f]: v }));
             const toggleTag = (tag) => {
@@ -372,6 +478,11 @@
                 setForm(prev => ({ ...prev, score: '', topic: '', tags: [], note: '' }));
             };
 
+            const saveDate = () => {
+                setTargetDateStr(tempDate);
+                setIsEditingDate(false);
+            };
+
             const books = Array.from({length: 20}, (_, i) => `Cam ${20-i}`).concat(Array.from({length: 9}, (_, i) => `机经 ${9-i}`));
             const currentConfig = SUBJECT_CONFIG[form.subject];
 
@@ -381,10 +492,23 @@
                         <Icons.Compass size={28} className="text-[#2c3e50]" />
                         <h1 className="text-2xl font-black tracking-tighter text-[#2c3e50]">IELTS ATLAS</h1>
                     </div>
-                    <div className="p-4 bg-[#2c3e50] text-white mx-4 mt-4 rounded-md flex justify-between items-center font-mono shadow-md">
-                        <span className="text-xs tracking-widest opacity-80">MISSION DEADLINE</span>
-                        <span className="text-xl font-bold text-[#f1c40f]">{daysLeft} DAYS</span>
+                    
+                    {/* 倒计时模块 */}
+                    <div className="p-4 bg-[#2c3e50] text-white mx-4 mt-4 rounded-md shadow-md">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs tracking-widest opacity-80 font-mono">MISSION DEADLINE</span>
+                            <button onClick={() => setIsEditingDate(!isEditingDate)} className="text-gray-400 hover:text-white transition-colors"><Icons.Edit size={14}/></button>
+                        </div>
+                        {isEditingDate ? (
+                            <div className="flex gap-2 items-center">
+                                <input type="date" className="text-black text-sm p-1 rounded w-full" value={tempDate} onChange={e => setTempDate(e.target.value)} />
+                                <button onClick={saveDate} className="bg-[#f1c40f] text-[#2c3e50] px-2 py-1 rounded text-xs font-bold">OK</button>
+                            </div>
+                        ) : (
+                            <span className="text-xl font-bold text-[#f1c40f] font-mono block text-right">{daysLeft} DAYS LEFT</span>
+                        )}
                     </div>
+
                     <div className="flex-1 overflow-y-auto p-6 space-y-5">
                         <div className="flex gap-3">
                             <div className="flex-1"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Source</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.book} onChange={e=>updateField('book', e.target.value)}>{books.map(b => <option key={b}>{b}</option>)}</select></div>
@@ -394,7 +518,11 @@
                             <div className="flex-1"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Subject</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm font-bold" style={{ color: currentConfig.color }} value={form.subject} onChange={e=>updateField('subject', e.target.value)}>{Object.entries(SUBJECT_CONFIG).map(([k, v]) => (<option key={k} value={k}>{v.icon} {v.label}</option>))}</select></div>
                             <div className="w-24"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Part</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.part} onChange={e=>updateField('part', e.target.value)}>{currentConfig.parts.map(p => <option key={p}>{p}</option>)}</select></div>
                         </div>
-                        <div><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Score / Count</label><input type="number" step="0.5" className="w-full p-3 border-2 border-gray-200 rounded text-lg font-bold text-[#2c3e50] focus:border-[#3498db] outline-none" placeholder="e.g. 7.5 or 32" value={form.score} onChange={e=>updateField('score', e.target.value)} /></div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Score / Count</label>
+                            <input type="number" step="0.5" className="w-full p-3 border-2 border-gray-200 rounded text-lg font-bold text-[#2c3e50] focus:border-[#3498db] outline-none" placeholder={form.subject === 'L' || form.subject === 'R' ? "输入做对题数 (e.g. 8)" : "输入分数 (e.g. 6.5)"} value={form.score} onChange={e=>updateField('score', e.target.value)} />
+                            {(form.subject === 'L' || form.subject === 'R') && <p className="text-[10px] text-gray-400 mt-1">*请直接输入Section/Part的答对数量，系统会自动聚合并计算雅思分数</p>}
+                        </div>
                         {(form.subject === 'W' || form.subject === 'S') && (<div className="animate-in fade-in slide-in-from-top-2 duration-300"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Topic 话题</label><input type="text" className="w-full p-2 border border-gray-300 rounded text-sm" placeholder="e.g. Technology..." value={form.topic} onChange={e=>updateField('topic', e.target.value)} /></div>)}
                         <div className="bg-gray-50 p-3 rounded border border-gray-200">
                             <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Diagnosis</label>
@@ -436,37 +564,101 @@
             const pieInstance = useRef(null);
 
             const config = SUBJECT_CONFIG[activeTab];
-            const filteredRecords = records.filter(r => {
-                if (r.subject !== activeTab) return false;
-                if (activePartFilter !== 'All' && r.part !== activePartFilter) return false;
-                return true;
-            });
+            const filteredRecords = records.filter(r => r.subject === activeTab);
+            
+            // 计算聚合统计数据 (Average, Trend) - 只针对完整 Test 计算
+            const stats = useMemo(() => processTestStats(records, activeTab), [records, activeTab]);
 
-            const handleSwitchTab = (tab) => { setActiveTab(tab); setActivePartFilter('All'); };
-            const avgScore = useMemo(() => {
-                if(filteredRecords.length === 0) return '-';
-                const sum = filteredRecords.reduce((acc, r) => acc + parseFloat(r.score), 0);
-                return (sum / filteredRecords.length).toFixed(1);
-            }, [filteredRecords]);
+            // Chart Data Logic: Switch between 'All' (Band Score) and 'Part' (Raw Count)
+            const chartData = useMemo(() => {
+                if (activePartFilter === 'All') {
+                    return stats.trend; // { label, value } where value is Band Score
+                } else {
+                    // Filter specific part
+                    return filteredRecords
+                        .filter(r => r.part === activePartFilter)
+                        .sort((a,b) => new Date(a.date) - new Date(b.date))
+                        .map(r => ({
+                            label: `${r.date.slice(5)}`, 
+                            value: parseFloat(r.score)
+                        }));
+                }
+            }, [activePartFilter, stats, filteredRecords]);
 
+            // Dynamic Average Calculation based on filter
+            const currentAvg = useMemo(() => {
+                if (activePartFilter === 'All') return stats.avg;
+                const partRecords = filteredRecords.filter(r => r.part === activePartFilter);
+                if (partRecords.length === 0) return '-';
+                const sum = partRecords.reduce((a, b) => a + parseFloat(b.score), 0);
+                return (sum / partRecords.length).toFixed(1);
+            }, [activePartFilter, stats, filteredRecords]);
+
+            const currentCount = activePartFilter === 'All' ? stats.count : filteredRecords.filter(r => r.part === activePartFilter).length;
+
+            const handleSwitchTab = (tab) => { 
+                setActiveTab(tab); 
+                setActivePartFilter('All'); 
+            };
+
+            // Chart Rendering
             useEffect(() => {
                 if (canvasRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
                     const ctx = canvasRef.current.getContext('2d');
-                    const sortedData = [...filteredRecords].reverse().slice(-15);
+                    
+                    const trendData = chartData.slice(-15); // Show last 15 entries
+
+                    // Determine Scale Range
+                    let minVal = 0;
+                    let maxVal = 9;
+                    if (activePartFilter !== 'All' && (activeTab === 'L' || activeTab === 'R')) {
+                        maxVal = 10; // Raw count usually out of 10 for parts
+                    } else if (activePartFilter === 'All') {
+                        minVal = 4; // Band scores rarely go below 4 visual
+                    }
+
                     chartInstance.current = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: sortedData.map(r => r.date.slice(5)),
-                            datasets: [{ label: 'Score Trend', data: sortedData.map(r => r.score), borderColor: config.color, backgroundColor: config.color + '20', fill: true, tension: 0.4 }]
+                            labels: trendData.map(d => d.label), 
+                            datasets: [{ 
+                                label: activePartFilter === 'All' ? 'Band Score' : 'Correct Count', 
+                                data: trendData.map(d => d.value), 
+                                borderColor: config.color, 
+                                backgroundColor: config.color + '20', 
+                                fill: true, 
+                                tension: 0.4,
+                                pointRadius: 4,
+                                pointHoverRadius: 6
+                            }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            scales: { 
+                                y: { 
+                                    beginAtZero: false, 
+                                    min: minVal, 
+                                    max: maxVal,
+                                    grid: { borderDash: [2, 2] } 
+                                },
+                                x: { grid: { display: false } }
+                            }, 
+                            plugins: { legend: { display: false } } 
+                        }
                     });
                 }
+
+                // Pie Chart
                 if (pieCanvasRef.current) {
                     if (pieInstance.current) pieInstance.current.destroy();
                     const tagCounts = {};
-                    filteredRecords.forEach(r => { r.tags.forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }); });
+                    // Filter diagnosis tags based on current part filter as well? 
+                    // Usually diagnosis is specific to the record.
+                    const diagRecords = activePartFilter === 'All' ? filteredRecords : filteredRecords.filter(r => r.part === activePartFilter);
+                    
+                    diagRecords.forEach(r => { r.tags.forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }); });
                     const labels = Object.keys(tagCounts);
                     const data = Object.values(tagCounts);
                     if (labels.length > 0) {
@@ -479,13 +671,18 @@
                     }
                 }
                 return () => { if(chartInstance.current) chartInstance.current.destroy(); if(pieInstance.current) pieInstance.current.destroy(); };
-            }, [activeTab, filteredRecords, config]);
+            }, [activeTab, chartData, config, activePartFilter]);
 
-            const groupedRecords = useMemo(() => {
+            // Matrix Data Construction for Grouped View
+            const matrixData = useMemo(() => {
                 if (viewMode !== 'grouped') return null;
-                const groups = {};
-                filteredRecords.forEach(r => { if (!groups[r.book]) groups[r.book] = []; groups[r.book].push(r); });
-                return groups;
+                const books = {};
+                filteredRecords.forEach(r => {
+                    if (!books[r.book]) books[r.book] = {};
+                    if (!books[r.book][r.test]) books[r.book][r.test] = {};
+                    books[r.book][r.test][r.part] = r;
+                });
+                return books;
             }, [filteredRecords, viewMode]);
 
             return (
@@ -502,22 +699,39 @@
                             <div className="flex justify-between items-end border-b border-gray-200 pb-4 mb-6">
                                 <div>
                                     <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2" style={{ color: config.color }}>{config.icon} {config.label}</h2>
-                                    <div className="flex gap-2 mt-2">
-                                        <button onClick={() => setActivePartFilter('All')} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${activePartFilter === 'All' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>全部</button>
+                                    
+                                    {/* Part Filter Buttons */}
+                                    <div className="flex gap-2 mt-3">
+                                        <button 
+                                            onClick={() => setActivePartFilter('All')} 
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border ${activePartFilter === 'All' ? 'bg-[#2c3e50] text-white border-[#2c3e50]' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}
+                                        >
+                                            全部 (Band Score)
+                                        </button>
                                         {config.parts.map(p => (
-                                            <button key={p} onClick={() => setActivePartFilter(p)} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${activePartFilter === p ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{p}</button>
+                                            <button 
+                                                key={p} 
+                                                onClick={() => setActivePartFilter(p)} 
+                                                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border ${activePartFilter === p ? 'bg-[#2c3e50] text-white border-[#2c3e50]' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}
+                                            >
+                                                {p}
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="flex gap-6 text-center">
-                                    <div><div className="text-3xl font-black text-gray-700">{filteredRecords.length}</div><div className="text-xs font-bold text-gray-400 uppercase">Sessions</div></div>
-                                    <div><div className="text-3xl font-black text-gray-700">{avgScore}</div><div className="text-xs font-bold text-gray-400 uppercase">Avg Score</div></div>
+                                    <div><div className="text-3xl font-black text-gray-700">{currentCount}</div><div className="text-xs font-bold text-gray-400 uppercase">{activePartFilter === 'All' ? 'Full Tests' : 'Records'}</div></div>
+                                    <div><div className="text-3xl font-black text-gray-700">{currentAvg}</div><div className="text-xs font-bold text-gray-400 uppercase">{activePartFilter === 'All' ? 'Avg Band' : 'Avg Count'}</div></div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-12 gap-6 mb-8">
                                 <div className="col-span-8 bg-gray-50 p-4 rounded-xl border border-gray-100 h-64 relative shadow-sm">
-                                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Score Trend 成绩走势 {activePartFilter !== 'All' && `(${activePartFilter})`}</h3>
-                                    <div className="h-52 w-full">{filteredRecords.length > 0 ? <canvas ref={canvasRef} /> : <div className="h-full flex items-center justify-center text-gray-400 italic">暂无数据</div>}</div>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">
+                                        {activePartFilter === 'All' ? 'Complete Test Trend (完整模考走势)' : `${activePartFilter} Trend (单项正确数走势)`}
+                                    </h3>
+                                    <div className="h-52 w-full">
+                                        {chartData.length > 0 ? <canvas ref={canvasRef} /> : <div className="h-full flex items-center justify-center text-gray-400 italic">暂无数据</div>}
+                                    </div>
                                 </div>
                                 <div className="col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-100 h-64 relative shadow-sm">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Diagnosis 错误归因</h3>
@@ -529,14 +743,14 @@
                                     <h3 className="font-bold text-gray-600 text-sm">练习记录</h3>
                                     <div className="flex gap-2">
                                         <button onClick={() => setViewMode('list')} className={`p-1 rounded ${viewMode==='list'?'bg-white shadow text-[#2c3e50]':'text-gray-400'}`} title="列表视图"><Icons.List size={16}/></button>
-                                        <button onClick={() => setViewMode('grouped')} className={`p-1 rounded ${viewMode==='grouped'?'bg-white shadow text-[#2c3e50]':'text-gray-400'}`} title="按书本归类"><Icons.Layers size={16}/></button>
+                                        <button onClick={() => setViewMode('grouped')} className={`p-1 rounded ${viewMode==='grouped'?'bg-white shadow text-[#2c3e50]':'text-gray-400'}`} title="矩阵视图"><Icons.Layers size={16}/></button>
                                     </div>
                                 </div>
                                 {viewMode === 'list' ? (
                                     <table className="w-full text-sm">
-                                        <thead className="bg-gray-50 text-gray-500 border-b border-gray-200"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Source</th><th className="p-3 text-left">Score</th>{(activeTab === 'W' || activeTab === 'S') && <th className="p-3 text-left">Topic</th>}<th className="p-3 text-left">Tags</th><th className="p-3 w-10"></th></tr></thead>
+                                        <thead className="bg-gray-50 text-gray-500 border-b border-gray-200"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Source</th><th className="p-3 text-left">Input</th>{(activeTab === 'W' || activeTab === 'S') && <th className="p-3 text-left">Topic</th>}<th className="p-3 text-left">Tags</th><th className="p-3 w-10"></th></tr></thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {filteredRecords.slice(0, 10).map((r) => (
+                                            {filteredRecords.slice(0, 20).map((r) => (
                                                 <tr key={r.id} className="hover:bg-gray-50">
                                                     <td className="p-3 font-mono text-gray-500">{r.date.slice(5)}</td>
                                                     <td className="p-3 font-medium">{r.book} {r.test} <span className="text-xs bg-gray-200 px-1 rounded ml-1">{r.part}</span></td>
@@ -546,32 +760,68 @@
                                                     <td className="p-3 text-center"><button onClick={() => onDeleteRecord(r.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="删除记录"><Icons.Trash size={16} /></button></td>
                                                 </tr>
                                             ))}
-                                            {filteredRecords.length > 10 && <tr><td colSpan="6" className="p-3 text-center text-gray-400 text-xs bg-gray-50">... 仅显示最近 10 条，请切换视图查看更多 ...</td></tr>}
                                             {filteredRecords.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-gray-400 italic">暂无练习记录</td></tr>}
                                         </tbody>
                                     </table>
                                 ) : (
-                                    <div className="p-4 space-y-4">
-                                        {Object.entries(groupedRecords).map(([book, recs]) => (
+                                    <div className="p-6 space-y-8">
+                                        {(activeTab === 'L' || activeTab === 'R') ? Object.entries(matrixData).map(([book, tests]) => (
                                             <div key={book} className="border border-gray-200 rounded-lg overflow-hidden">
-                                                <div className="bg-gray-100 p-2 font-bold text-gray-700 text-sm flex justify-between">
-                                                    <span>{book}</span>
-                                                    <span className="text-gray-400 font-normal text-xs">{recs.length} records</span>
-                                                </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-2 bg-gray-50/50">
-                                                    {recs.map(r => (
-                                                        <div key={r.id} className="bg-white p-2 rounded border border-gray-100 text-xs flex justify-between items-center group relative">
-                                                            <span className="font-medium text-gray-600">{r.test} {r.part}</span>
-                                                            <div className="flex gap-2 items-center">
-                                                                <span className="font-bold text-[#2c3e50]">{r.score}</span>
-                                                                <button onClick={() => onDeleteRecord(r.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.Trash size={14}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                <div className="bg-[#2c3e50] text-white p-2 px-4 font-bold text-sm">{book}</div>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm text-center">
+                                                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                                                            <tr>
+                                                                <th className="p-2 w-20 text-left pl-4">Test</th>
+                                                                {config.parts.map(p => <th key={p} className="p-2">{p}</th>)}
+                                                                <th className="p-2 w-24 font-bold text-[#2c3e50]">Band</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100">
+                                                            {['Test 1', 'Test 2', 'Test 3', 'Test 4'].map(testName => {
+                                                                const testData = tests[testName] || {};
+                                                                // 计算行总分
+                                                                let totalCount = 0;
+                                                                let hasAllParts = true;
+                                                                config.parts.forEach(p => {
+                                                                    if (testData[p]) totalCount += parseFloat(testData[p].score);
+                                                                    else hasAllParts = false;
+                                                                });
+                                                                const band = hasAllParts ? getBandScore(totalCount, activeTab) : '-';
+                                                                
+                                                                // 如果这一行完全没有数据，是否隐藏？用户希望看到Test 1-4排列，所以保留空行更好，或者置灰
+                                                                const isEmpty = Object.keys(testData).length === 0;
+
+                                                                return (
+                                                                    <tr key={testName} className={isEmpty ? "bg-gray-50/30" : "hover:bg-blue-50"}>
+                                                                        <td className="p-3 text-left pl-4 font-medium text-gray-600">{testName}</td>
+                                                                        {config.parts.map(p => {
+                                                                            const rec = testData[p];
+                                                                            return (
+                                                                                <td key={p} className="p-2 border-l border-gray-100 relative group">
+                                                                                    {rec ? (
+                                                                                        <>
+                                                                                            <span className="font-bold text-gray-800">{rec.score}</span>
+                                                                                            <button onClick={() => onDeleteRecord(rec.id)} className="absolute top-1 right-1 text-red-300 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"><Icons.X size={10} /></button>
+                                                                                        </>
+                                                                                    ) : <span className="text-gray-200">-</span>}
+                                                                                </td>
+                                                                            );
+                                                                        })}
+                                                                        <td className="p-2 border-l border-gray-200 font-bold text-[#3498db] bg-blue-50/30">
+                                                                            {band}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             </div>
-                                        ))}
-                                        {Object.keys(groupedRecords).length === 0 && <div className="text-center text-gray-400 italic p-4">暂无数据</div>}
+                                        )) : (
+                                            <div className="text-center text-gray-400 py-10">矩阵视图仅适用于 听力 (L) 和 阅读 (R)</div>
+                                        )}
+                                        {Object.keys(matrixData || {}).length === 0 && <div className="text-center text-gray-400 italic">暂无数据</div>}
                                     </div>
                                 )}
                             </div>
@@ -598,12 +848,11 @@
             const [mapFeatures, setMapFeatures] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(false);
-            // 调整初始缩放和偏移，让地图默认显示更全
             const [transform, setTransform] = useState({ k: 0.75, x: 100, y: 50 });
             const [isDragging, setIsDragging] = useState(false);
             const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
             const [retryCount, setRetryCount] = useState(0);
-            const [hoveredCountry, setHoveredCountry] = useState(null); // Tooltip state
+            const [hoveredCountry, setHoveredCountry] = useState(null); 
             const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
             useEffect(() => {
@@ -623,6 +872,10 @@
                 const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R') && r.countryId);
                 
                 activeRecords.forEach(r => {
+                    // 地图颜色逻辑保持原样，高分显示金色。
+                    // 这里我们假设 r.score 是答对数量 (e.g. 9/10)，通常大于8都算不错
+                    // 或者如果是总分... 
+                    // 为了简单起见，这里沿用原始逻辑: r.score 如果是Part score, 比如10，就是High
                     if (!statusMap[r.countryId] || parseFloat(r.score) > parseFloat(statusMap[r.countryId].record.score)) {
                         statusMap[r.countryId] = { record: r };
                     }
@@ -633,9 +886,10 @@
                     let statusClass = 'fill-default';
                     if (recordInfo) {
                         const s = parseFloat(recordInfo.record.score);
-                        if (s >= 8.0 || s >= 35) statusClass = 'fill-high';
-                        else if ((s >= 7.0 && s < 8.0) || (s >= 30 && s < 35)) statusClass = 'fill-mid'; 
-                        else if ((s >= 6.0 && s < 7.0) || (s >= 23 && s < 30)) statusClass = 'fill-pass'; 
+                        // 简单阈值：如果是Part Score (0-10) 或 Band Score (0-9)
+                        if (s >= 8.0) statusClass = 'fill-high';
+                        else if (s >= 6.5) statusClass = 'fill-mid'; 
+                        else if (s >= 5.0) statusClass = 'fill-pass'; 
                         else statusClass = 'fill-low';
                     }
                     
@@ -673,9 +927,8 @@
             return (
                 <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-[#89cff0]"> 
                     
-                    {/* HUD - 1:1 REPLICA */}
+                    {/* HUD */}
                     <div className="absolute top-6 left-6 z-20 flex gap-4 font-['Inter']">
-                        {/* Card 1: World Exploration */}
                         <div className="hud-card">
                             <div className="hud-header">
                                 <span>WORLD EXPLORATION</span>
@@ -690,7 +943,6 @@
                              {isMapFull && <button onClick={onMapReset} className="text-[10px] text-red-500 font-bold mt-1 animate-pulse hover:underline text-right block w-full">LEVEL UP &gt;</button>}
                         </div>
 
-                        {/* Card 2: Landmark Collection */}
                         <div className="hud-card">
                             <div className="hud-header">
                                 <span>LANDMARK COLLECTION</span>
@@ -710,7 +962,7 @@
                     {/* Controls */}
                     <div className="absolute bottom-56 right-8 z-10 flex flex-col gap-2"><button onClick={() => setTransform(p => ({ ...p, k: Math.min(p.k * 1.2, 8) }))} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Plus size={20}/></button><button onClick={() => setTransform(p => ({ ...p, k: Math.max(p.k / 1.2, 1) }))} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Minus size={20}/></button><button onClick={() => setTransform({ k: 0.75, x: 100, y: 50 })} className="bg-white p-2 rounded shadow hover:bg-gray-100"><Icons.Refresh size={20}/></button>{error && <button onClick={() => setRetryCount(c => c + 1)} className="bg-red-100 text-red-600 p-2 rounded shadow animate-pulse"><Icons.Refresh size={20}/></button>}</div>
                     
-                    {/* Bottom Shelf - ENLARGED (h-52, w-40) */}
+                    {/* Bottom Shelf */}
                     <div className="absolute bottom-0 left-0 w-full h-52 bg-gradient-to-t from-white/30 to-transparent z-20 flex items-center px-8 gap-10 overflow-x-auto scrollbar-hide pb-4 pt-2">
                         {unlockedLandmarks.length === 0 && <div className="text-white/80 text-xl italic w-full text-center font-bold tracking-widest drop-shadow-md">完成写作/口语练习来解锁地标收藏...</div>}
                         {unlockedLandmarks.map((lm, i) => (
@@ -741,7 +993,7 @@
                                     <div className="font-bold text-gray-800">🎉 恭喜点亮 {hoveredCountry.cnName} ({hoveredCountry.name})</div>
                                     <div className="text-xs text-gray-500 mt-1">📅 {hoveredCountry.record.date}</div>
                                     <div className="text-xs font-mono text-blue-600 mt-1">📚 {hoveredCountry.record.book} {hoveredCountry.record.test} {hoveredCountry.record.part}</div>
-                                    <div className="text-xs font-bold text-[#f1c40f] mt-1">Score: {hoveredCountry.record.score}</div>
+                                    <div className="text-xs font-bold text-[#f1c40f] mt-1">Score/Count: {hoveredCountry.record.score}</div>
                                 </div>
                             )}
                         </>
