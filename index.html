@@ -196,13 +196,11 @@
         ];
 
         // --- 工具函数：分数计算 ---
-        // 升级版：雅思官方评分对照表 (Accurate for Academic 2024)
         const getBandScore = (count, type) => {
             const c = parseInt(count);
             if (isNaN(c)) return 0;
             
             if (type === 'L') {
-                // 听力评分标准 (Listening)
                 if (c >= 39) return 9.0;
                 if (c >= 37) return 8.5;
                 if (c >= 35) return 8.0;
@@ -216,16 +214,15 @@
                 if (c >= 10) return 4.0;
                 return 3.5;
             } else if (type === 'R') {
-                // 阅读评分标准 (Academic Reading) - 通常比听力稍微严格一点
                 if (c >= 39) return 9.0;
                 if (c >= 37) return 8.5;
                 if (c >= 35) return 8.0;
-                if (c >= 33) return 7.5; // 不同点
+                if (c >= 33) return 7.5; 
                 if (c >= 30) return 7.0;
-                if (c >= 27) return 6.5; // 不同点
+                if (c >= 27) return 6.5; 
                 if (c >= 23) return 6.0;
-                if (c >= 19) return 5.5; // 不同点
-                if (c >= 15) return 5.0; // 不同点
+                if (c >= 19) return 5.5; 
+                if (c >= 15) return 5.0; 
                 if (c >= 13) return 4.5;
                 if (c >= 10) return 4.0;
                 return 3.5;
@@ -237,16 +234,19 @@
             if (subject !== 'L' && subject !== 'R') {
                 const validRecords = records.filter(r => r.subject === subject);
                 const avg = validRecords.length ? (validRecords.reduce((a, b) => a + parseFloat(b.score), 0) / validRecords.length).toFixed(1) : '-';
-                const trend = validRecords.sort((a,b) => new Date(a.date) - new Date(b.date)).map(r => ({ label: `${r.date.slice(5)}`, value: r.score }));
+                // Fix: Sort trend by id (timestamp)
+                const trend = validRecords.sort((a,b) => a.id - b.id).map(r => ({ label: `${r.date.slice(5)}`, value: r.score }));
                 return { avg, trend, count: validRecords.length };
             }
 
             const groups = {};
             records.filter(r => r.subject === subject).forEach(r => {
                 const key = `${r.book}|${r.test}`;
-                if (!groups[key]) groups[key] = { parts: {}, date: r.date, book: r.book, test: r.test };
+                // Fix: Track maxId to sort full tests by the latest part completion time
+                if (!groups[key]) groups[key] = { parts: {}, date: r.date, book: r.book, test: r.test, maxId: r.id };
                 groups[key].parts[r.part] = parseFloat(r.score); 
                 if (new Date(r.date) > new Date(groups[key].date)) groups[key].date = r.date;
+                if (r.id > groups[key].maxId) groups[key].maxId = r.id;
             });
 
             const completedTests = [];
@@ -272,12 +272,15 @@
                         label: `${g.book} ${g.test}`,
                         date: g.date,
                         value: getBandScore(totalCorrect, subject),
-                        rawTotal: totalCorrect
+                        rawTotal: totalCorrect,
+                        maxId: g.maxId
                     });
                 }
             });
 
-            completedTests.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // Fix: Sort by maxId (timestamp)
+            completedTests.sort((a, b) => a.maxId - b.maxId);
+            
             const avg = completedTests.length ? (completedTests.reduce((a, b) => a + b.value, 0) / completedTests.length).toFixed(1) : '-';
             return { avg, trend: completedTests, count: completedTests.length };
         };
@@ -297,166 +300,8 @@
             );
         };
 
-        function App() {
-            const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('ielts_records') || '[]'));
-            const [unlockedLandmarks, setUnlockedLandmarks] = useState(() => JSON.parse(localStorage.getItem('ielts_landmarks') || '[]'));
-            const [mapCycle, setMapCycle] = useState(() => parseInt(localStorage.getItem('ielts_map_cycle') || '1'));
-            const [mapResetDate, setMapResetDate] = useState(() => {
-                const d = localStorage.getItem('ielts_map_reset_date');
-                return d ? new Date(d) : new Date(0); 
-            });
-            const [targetDateStr, setTargetDateStr] = useState(() => localStorage.getItem('ielts_target_date') || DEFAULT_TARGET_DATE);
-            
-            // New: Custom Tags State
-            const [customTagsMap, setCustomTagsMap] = useState(() => JSON.parse(localStorage.getItem('ielts_custom_tags') || '{"L":[],"R":[],"W":[],"S":[]}'));
+        // --- COMPONENTS DEFINITIONS (MOVED UP TO FIX REFERENCE ERROR) ---
 
-            const [showDataCenter, setShowDataCenter] = useState(false);
-            const [showJournal, setShowJournal] = useState(false);
-            const [showLandmarkModal, setShowLandmarkModal] = useState(false);
-            const [currentLandmark, setCurrentLandmark] = useState(null);
-            const [notification, setNotification] = useState(null);
-
-            useEffect(() => {
-                localStorage.setItem('ielts_records', JSON.stringify(records));
-                localStorage.setItem('ielts_landmarks', JSON.stringify(unlockedLandmarks));
-                localStorage.setItem('ielts_map_cycle', mapCycle.toString());
-                localStorage.setItem('ielts_map_reset_date', mapResetDate.toISOString());
-                localStorage.setItem('ielts_target_date', targetDateStr);
-                localStorage.setItem('ielts_custom_tags', JSON.stringify(customTagsMap));
-            }, [records, unlockedLandmarks, mapCycle, mapResetDate, targetDateStr, customTagsMap]);
-
-            const showToast = (text, type = 'info') => {
-                setNotification({ text, type });
-                setTimeout(() => setNotification(null), 3000);
-            };
-
-            const handleAddCustomTag = (subject, tag) => {
-                if (!customTagsMap[subject].includes(tag)) {
-                    setCustomTagsMap(prev => ({
-                        ...prev,
-                        [subject]: [...(prev[subject] || []), tag]
-                    }));
-                }
-            };
-
-            const handleAddRecord = (newRecord) => {
-                let recordWithMeta = { ...newRecord };
-                
-                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
-                    const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R'));
-                    const usedCountryIds = activeRecords.map(r => r.countryId).filter(id => id);
-                    const allCountryIds = Object.keys(COUNTRY_CN_MAP);
-                    let availableIds = allCountryIds.filter(id => !usedCountryIds.includes(id));
-                    
-                    if (availableIds.length === 0) {
-                        availableIds = allCountryIds; 
-                    }
-                    
-                    const randomId = availableIds[Math.floor(Math.random() * availableIds.length)];
-                    recordWithMeta.countryId = randomId;
-                } else if (newRecord.subject === 'W' || newRecord.subject === 'S') {
-                    const undiscovered = LANDMARKS.filter(l => !unlockedLandmarks.find(ul => ul.id === l.id));
-                    if (undiscovered.length > 0) {
-                        const newLm = undiscovered[Math.floor(Math.random() * undiscovered.length)];
-                        setUnlockedLandmarks([...unlockedLandmarks, newLm]);
-                        setCurrentLandmark(newLm);
-                        setShowLandmarkModal(true);
-                        recordWithMeta.landmarkId = newLm.id; 
-                    } else {
-                        showToast("太棒了！所有地标已收集完毕！🎉", 'success');
-                    }
-                }
-
-                setRecords([recordWithMeta, ...records]);
-                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
-                    showToast(`地图已点亮：${COUNTRY_CN_MAP[recordWithMeta.countryId]}!`, 'success');
-                }
-            };
-
-            const handleDeleteRecord = (id) => {
-                const recordToDelete = records.find(r => r.id === id);
-                const newRecords = records.filter(r => r.id !== id);
-                setRecords(newRecords);
-
-                if (recordToDelete && recordToDelete.landmarkId) {
-                    const isStillUsed = newRecords.some(r => r.landmarkId === recordToDelete.landmarkId);
-                    if (!isStillUsed) {
-                        setUnlockedLandmarks(prev => prev.filter(l => l.id !== recordToDelete.landmarkId));
-                        showToast("关联地标已重新锁定", 'info');
-                    }
-                }
-                showToast("记录已删除", 'info');
-            };
-
-            const handleMapReset = () => {
-                if (confirm("🎉 恭喜你点亮了所有国家！确定要开启下一轮探索吗？(历史记录保留，地图颜色重置)")) {
-                    setMapCycle(prev => prev + 1);
-                    setMapResetDate(new Date()); 
-                    showToast(`欢迎来到 World Tour Level ${mapCycle + 1} ! 🚀`, 'success');
-                }
-            };
-
-            const handleShowLandmark = (landmark) => {
-                setCurrentLandmark(landmark);
-                setShowLandmarkModal(true);
-            };
-
-            return (
-                <div className="flex h-screen w-screen overflow-hidden">
-                    <Sidebar 
-                        onAddRecord={handleAddRecord} 
-                        onOpenData={() => setShowDataCenter(true)} 
-                        onOpenJournal={() => setShowJournal(true)} 
-                        targetDateStr={targetDateStr}
-                        setTargetDateStr={setTargetDateStr}
-                        customTagsMap={customTagsMap}
-                        onSaveCustomTag={handleAddCustomTag}
-                    />
-                    <div className="flex-1 relative bg-[#89cff0]">
-                        <HandDrawnMap 
-                            records={records} 
-                            mapResetDate={mapResetDate}
-                            mapCycle={mapCycle}
-                            onMapReset={handleMapReset}
-                            unlockedLandmarks={unlockedLandmarks}
-                            totalLandmarksCount={LANDMARKS.length}
-                            totalCountriesCount={174}
-                            onShowLandmark={handleShowLandmark}
-                        />
-                    </div>
-                    {showDataCenter && <DataCenter records={records} onDeleteRecord={handleDeleteRecord} onClose={() => setShowDataCenter(false)} />}
-                    {showJournal && <Journal records={records} onClose={() => setShowJournal(false)} />}
-                    {showLandmarkModal && currentLandmark && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-                            <div className="relative bg-[#fdfbf7] p-6 shadow-2xl transform rotate-1 max-w-sm w-full flex flex-col items-center">
-                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-32 h-8 bg-yellow-200/80 rotate-1 shadow-sm z-10"></div>
-                                <button onClick={() => setShowLandmarkModal(false)} className="absolute -top-4 -right-4 bg-red-500 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-red-600 transition-colors z-20"><Icons.X size={20} /></button>
-                                <div className="aspect-square w-full mb-4 relative group bg-white p-2 shadow-sm border border-gray-200">
-                                    <SketchImage src={currentLandmark.img} alt={currentLandmark.name} className="w-full h-full" />
-                                </div>
-                                <h2 className="text-3xl font-bold text-[#2c3e50] text-center mb-1" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.name}</h2>
-                                <div className="flex justify-center items-center gap-2 text-gray-500 text-sm mb-4"><Icons.MapPin size={14} /> {currentLandmark.location}</div>
-                                <p className="text-center text-gray-600 font-serif italic text-sm mb-4 px-2">"{currentLandmark.desc}"</p>
-                                <div className="w-full border-t-2 border-dashed border-gray-300 pt-4 mt-2">
-                                    <div className="flex gap-2 text-gray-400 mb-1 justify-center"><Icons.Quote size={16} className="transform rotate-180"/></div>
-                                    <p className="text-center text-[#e1685a] font-hand font-medium text-lg leading-relaxed" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.quote}</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {notification && (
-                        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
-                            <div className="bg-[#2c3e50] text-white px-6 py-3 rounded-full shadow-2xl animate-bounce flex items-center gap-3 border-2 border-white">
-                                {notification.type === 'error' ? <Icons.X size={18} /> : <Icons.MapPin size={18} className="text-[#e6b32e]" />}
-                                <span className="font-bold">{notification.text}</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // --- Sidebar ---
         function Sidebar({ onAddRecord, onOpenData, onOpenJournal, targetDateStr, setTargetDateStr, customTagsMap, onSaveCustomTag }) {
             const [form, setForm] = useState({ book: 'Cam 20', test: 'Test 1', subject: 'L', part: 'S1', score: '', topic: '', tags: [], note: '' });
             const [daysLeft, setDaysLeft] = useState(0);
@@ -479,7 +324,7 @@
                     ...prev,
                     subject: newSub,
                     part: defaultPart,
-                    tags: [] // Clear tags on subject switch? Optional, but safer
+                    tags: [] 
                 }));
             };
 
@@ -494,7 +339,7 @@
                 if (customTag.trim()) {
                     const newTag = customTag.trim();
                     toggleTag(newTag);
-                    onSaveCustomTag(form.subject, newTag); // Persist tag
+                    onSaveCustomTag(form.subject, newTag); 
                     setCustomTag('');
                     setShowCustomTagInput(false);
                 }
@@ -514,9 +359,7 @@
             const books = Array.from({length: 20}, (_, i) => `Cam ${20-i}`).concat(Array.from({length: 9}, (_, i) => `机经 ${9-i}`));
             const currentConfig = SUBJECT_CONFIG[form.subject];
             
-            // Merge default tags with custom tags for the current subject
             const allAvailableTags = [...DIAGNOSIS_TAGS[form.subject], ...(customTagsMap[form.subject] || [])];
-            // Remove duplicates just in case
             const uniqueAvailableTags = [...new Set(allAvailableTags)];
 
             return (
@@ -526,7 +369,6 @@
                         <h1 className="text-2xl font-black tracking-tighter text-[#2c3e50]">IELTS ATLAS</h1>
                     </div>
                     
-                    {/* 倒计时模块 */}
                     <div className="p-4 bg-[#2c3e50] text-white mx-4 mt-4 rounded-md shadow-md">
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-xs tracking-widest opacity-80 font-mono">MISSION DEADLINE</span>
@@ -609,7 +451,8 @@
                 } else {
                     return filteredRecords
                         .filter(r => r.part === activePartFilter)
-                        .sort((a,b) => new Date(a.date) - new Date(b.date))
+                        // Fix: Sort trend by id (timestamp) instead of date string to handle same-day records correctly
+                        .sort((a,b) => a.id - b.id)
                         .map(r => ({
                             label: `${r.date.slice(5)}`, 
                             value: parseFloat(r.score)
@@ -642,7 +485,7 @@
                     let minVal = 0;
                     let maxVal = 9;
                     if (activePartFilter !== 'All' && (activeTab === 'L' || activeTab === 'R')) {
-                        maxVal = 15; // Increased to 15 to accommodate P3/S4 extra questions
+                        maxVal = 15; // Increased to 15
                     } else if (activePartFilter === 'All') {
                         minVal = 4; 
                     }
@@ -943,7 +786,6 @@
 
             return (
                 <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-[#89cff0]"> 
-                    
                     {/* HUD */}
                     <div className="absolute top-6 left-6 z-20 flex gap-4 font-['Inter']">
                         <div className="hud-card">
@@ -1014,6 +856,166 @@
                                 </div>
                             )}
                         </>
+                    )}
+                </div>
+            );
+        }
+
+        // --- MAIN APP COMPONENT ---
+        
+        function App() {
+            const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('ielts_records') || '[]'));
+            const [unlockedLandmarks, setUnlockedLandmarks] = useState(() => JSON.parse(localStorage.getItem('ielts_landmarks') || '[]'));
+            const [mapCycle, setMapCycle] = useState(() => parseInt(localStorage.getItem('ielts_map_cycle') || '1'));
+            const [mapResetDate, setMapResetDate] = useState(() => {
+                const d = localStorage.getItem('ielts_map_reset_date');
+                return d ? new Date(d) : new Date(0); 
+            });
+            const [targetDateStr, setTargetDateStr] = useState(() => localStorage.getItem('ielts_target_date') || DEFAULT_TARGET_DATE);
+            
+            const [customTagsMap, setCustomTagsMap] = useState(() => JSON.parse(localStorage.getItem('ielts_custom_tags') || '{"L":[],"R":[],"W":[],"S":[]}'));
+
+            const [showDataCenter, setShowDataCenter] = useState(false);
+            const [showJournal, setShowJournal] = useState(false);
+            const [showLandmarkModal, setShowLandmarkModal] = useState(false);
+            const [currentLandmark, setCurrentLandmark] = useState(null);
+            const [notification, setNotification] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem('ielts_records', JSON.stringify(records));
+                localStorage.setItem('ielts_landmarks', JSON.stringify(unlockedLandmarks));
+                localStorage.setItem('ielts_map_cycle', mapCycle.toString());
+                localStorage.setItem('ielts_map_reset_date', mapResetDate.toISOString());
+                localStorage.setItem('ielts_target_date', targetDateStr);
+                localStorage.setItem('ielts_custom_tags', JSON.stringify(customTagsMap));
+            }, [records, unlockedLandmarks, mapCycle, mapResetDate, targetDateStr, customTagsMap]);
+
+            const showToast = (text, type = 'info') => {
+                setNotification({ text, type });
+                setTimeout(() => setNotification(null), 3000);
+            };
+
+            const handleAddCustomTag = (subject, tag) => {
+                if (!customTagsMap[subject].includes(tag)) {
+                    setCustomTagsMap(prev => ({
+                        ...prev,
+                        [subject]: [...(prev[subject] || []), tag]
+                    }));
+                }
+            };
+
+            const handleAddRecord = (newRecord) => {
+                let recordWithMeta = { ...newRecord };
+                
+                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
+                    const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R'));
+                    const usedCountryIds = activeRecords.map(r => r.countryId).filter(id => id);
+                    const allCountryIds = Object.keys(COUNTRY_CN_MAP);
+                    let availableIds = allCountryIds.filter(id => !usedCountryIds.includes(id));
+                    
+                    if (availableIds.length === 0) {
+                        availableIds = allCountryIds; 
+                    }
+                    
+                    const randomId = availableIds[Math.floor(Math.random() * availableIds.length)];
+                    recordWithMeta.countryId = randomId;
+                } else if (newRecord.subject === 'W' || newRecord.subject === 'S') {
+                    const undiscovered = LANDMARKS.filter(l => !unlockedLandmarks.find(ul => ul.id === l.id));
+                    if (undiscovered.length > 0) {
+                        const newLm = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+                        setUnlockedLandmarks([...unlockedLandmarks, newLm]);
+                        setCurrentLandmark(newLm);
+                        setShowLandmarkModal(true);
+                        recordWithMeta.landmarkId = newLm.id; 
+                    } else {
+                        showToast("太棒了！所有地标已收集完毕！🎉", 'success');
+                    }
+                }
+
+                setRecords([recordWithMeta, ...records]);
+                if (newRecord.subject === 'L' || newRecord.subject === 'R') {
+                    showToast(`地图已点亮：${COUNTRY_CN_MAP[recordWithMeta.countryId]}!`, 'success');
+                }
+            };
+
+            const handleDeleteRecord = (id) => {
+                const recordToDelete = records.find(r => r.id === id);
+                const newRecords = records.filter(r => r.id !== id);
+                setRecords(newRecords);
+
+                if (recordToDelete && recordToDelete.landmarkId) {
+                    const isStillUsed = newRecords.some(r => r.landmarkId === recordToDelete.landmarkId);
+                    if (!isStillUsed) {
+                        setUnlockedLandmarks(prev => prev.filter(l => l.id !== recordToDelete.landmarkId));
+                        showToast("关联地标已重新锁定", 'info');
+                    }
+                }
+                showToast("记录已删除", 'info');
+            };
+
+            const handleMapReset = () => {
+                if (confirm("🎉 恭喜你点亮了所有国家！确定要开启下一轮探索吗？(历史记录保留，地图颜色重置)")) {
+                    setMapCycle(prev => prev + 1);
+                    setMapResetDate(new Date()); 
+                    showToast(`欢迎来到 World Tour Level ${mapCycle + 1} ! 🚀`, 'success');
+                }
+            };
+
+            const handleShowLandmark = (landmark) => {
+                setCurrentLandmark(landmark);
+                setShowLandmarkModal(true);
+            };
+
+            return (
+                <div className="flex h-screen w-screen overflow-hidden">
+                    <Sidebar 
+                        onAddRecord={handleAddRecord} 
+                        onOpenData={() => setShowDataCenter(true)} 
+                        onOpenJournal={() => setShowJournal(true)} 
+                        targetDateStr={targetDateStr}
+                        setTargetDateStr={setTargetDateStr}
+                        customTagsMap={customTagsMap}
+                        onSaveCustomTag={handleAddCustomTag}
+                    />
+                    <div className="flex-1 relative bg-[#89cff0]">
+                        <HandDrawnMap 
+                            records={records} 
+                            mapResetDate={mapResetDate}
+                            mapCycle={mapCycle}
+                            onMapReset={handleMapReset}
+                            unlockedLandmarks={unlockedLandmarks}
+                            totalLandmarksCount={LANDMARKS.length}
+                            totalCountriesCount={174}
+                            onShowLandmark={handleShowLandmark}
+                        />
+                    </div>
+                    {showDataCenter && <DataCenter records={records} onDeleteRecord={handleDeleteRecord} onClose={() => setShowDataCenter(false)} />}
+                    {showJournal && <Journal records={records} onClose={() => setShowJournal(false)} />}
+                    {showLandmarkModal && currentLandmark && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+                            <div className="relative bg-[#fdfbf7] p-6 shadow-2xl transform rotate-1 max-w-sm w-full flex flex-col items-center">
+                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-32 h-8 bg-yellow-200/80 rotate-1 shadow-sm z-10"></div>
+                                <button onClick={() => setShowLandmarkModal(false)} className="absolute -top-4 -right-4 bg-red-500 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-red-600 transition-colors z-20"><Icons.X size={20} /></button>
+                                <div className="aspect-square w-full mb-4 relative group bg-white p-2 shadow-sm border border-gray-200">
+                                    <SketchImage src={currentLandmark.img} alt={currentLandmark.name} className="w-full h-full" />
+                                </div>
+                                <h2 className="text-3xl font-bold text-[#2c3e50] text-center mb-1" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.name}</h2>
+                                <div className="flex justify-center items-center gap-2 text-gray-500 text-sm mb-4"><Icons.MapPin size={14} /> {currentLandmark.location}</div>
+                                <p className="text-center text-gray-600 font-serif italic text-sm mb-4 px-2">"{currentLandmark.desc}"</p>
+                                <div className="w-full border-t-2 border-dashed border-gray-300 pt-4 mt-2">
+                                    <div className="flex gap-2 text-gray-400 mb-1 justify-center"><Icons.Quote size={16} className="transform rotate-180"/></div>
+                                    <p className="text-center text-[#e1685a] font-hand font-medium text-lg leading-relaxed" style={{ fontFamily: '"Comic Sans MS", cursive' }}>{currentLandmark.quote}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {notification && (
+                        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
+                            <div className="bg-[#2c3e50] text-white px-6 py-3 rounded-full shadow-2xl animate-bounce flex items-center gap-3 border-2 border-white">
+                                {notification.type === 'error' ? <Icons.X size={18} /> : <Icons.MapPin size={18} className="text-[#e6b32e]" />}
+                                <span className="font-bold">{notification.text}</span>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
