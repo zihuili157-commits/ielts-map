@@ -132,7 +132,6 @@
         };
 
         const GEOJSON_URL = 'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson';
-        // 默认目标日期，可被 localStorage 覆盖
         const DEFAULT_TARGET_DATE = '2025-12-28';
 
         const SUBJECT_CONFIG = {
@@ -177,7 +176,6 @@
             'ZAF': '南非', 'ZMB': '赞比亚', 'ZWE': '津巴布韦'
         };
 
-        // 16个稳定地标
         const LANDMARKS = [
             { id: 1, name: '新天鹅堡', location: 'Germany 德国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Schloss_Neuschwanstein_2013.jpg/800px-Schloss_Neuschwanstein_2013.jpg', desc: '迪士尼城堡的原型', quote: '每个人的心中，都住着一个童话。' },
             { id: 2, name: '自由女神像', location: 'USA 美国', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Statue_of_Liberty_7.jpg/640px-Statue_of_Liberty_7.jpg', desc: '照耀世界的自由之光', quote: '读万卷书，行万里路。' },
@@ -198,47 +196,56 @@
         ];
 
         // --- 工具函数：分数计算 ---
-        // 雅思官方评分对照表 (Academic)
+        // 升级版：雅思官方评分对照表 (Accurate for Academic 2024)
         const getBandScore = (count, type) => {
             const c = parseInt(count);
             if (isNaN(c)) return 0;
             
-            if (type === 'L' || type === 'R') {
-                // Listening and Reading (Academic) roughly share similar scaling for bands 6-9
-                // Standard IELTS 40 questions scale
+            if (type === 'L') {
+                // 听力评分标准 (Listening)
                 if (c >= 39) return 9.0;
                 if (c >= 37) return 8.5;
                 if (c >= 35) return 8.0;
-                if (c >= 32) return 7.5; // L: 32, R: 33 usually, simplifying slightly or being lenient
+                if (c >= 32) return 7.5; 
                 if (c >= 30) return 7.0;
-                if (c >= 26) return 6.5; // L: 26, R: 27
+                if (c >= 26) return 6.5; 
                 if (c >= 23) return 6.0;
-                if (c >= 18) return 5.5; // L: 18, R: 19
-                if (c >= 16) return 5.0; // L: 16, R: 15
+                if (c >= 18) return 5.5; 
+                if (c >= 16) return 5.0; 
+                if (c >= 13) return 4.5;
+                if (c >= 10) return 4.0;
+                return 3.5;
+            } else if (type === 'R') {
+                // 阅读评分标准 (Academic Reading) - 通常比听力稍微严格一点
+                if (c >= 39) return 9.0;
+                if (c >= 37) return 8.5;
+                if (c >= 35) return 8.0;
+                if (c >= 33) return 7.5; // 不同点
+                if (c >= 30) return 7.0;
+                if (c >= 27) return 6.5; // 不同点
+                if (c >= 23) return 6.0;
+                if (c >= 19) return 5.5; // 不同点
+                if (c >= 15) return 5.0; // 不同点
                 if (c >= 13) return 4.5;
                 if (c >= 10) return 4.0;
                 return 3.5;
             }
-            return parseFloat(count) || 0; // W/S 直接返回分数
+            return parseFloat(count) || 0; 
         };
 
-        // 聚合函数：将 S1/S2/S3/S4 聚合为整套题
         const processTestStats = (records, subject) => {
             if (subject !== 'L' && subject !== 'R') {
-                // 口语写作直接取平均
                 const validRecords = records.filter(r => r.subject === subject);
                 const avg = validRecords.length ? (validRecords.reduce((a, b) => a + parseFloat(b.score), 0) / validRecords.length).toFixed(1) : '-';
                 const trend = validRecords.sort((a,b) => new Date(a.date) - new Date(b.date)).map(r => ({ label: `${r.date.slice(5)}`, value: r.score }));
                 return { avg, trend, count: validRecords.length };
             }
 
-            // 听力阅读聚合逻辑
             const groups = {};
             records.filter(r => r.subject === subject).forEach(r => {
-                const key = `${r.book}|${r.test}`; // Key: Cam 18|Test 1
+                const key = `${r.book}|${r.test}`;
                 if (!groups[key]) groups[key] = { parts: {}, date: r.date, book: r.book, test: r.test };
                 groups[key].parts[r.part] = parseFloat(r.score); 
-                // 更新日期为最近的一次练习
                 if (new Date(r.date) > new Date(groups[key].date)) groups[key].date = r.date;
             });
 
@@ -249,13 +256,11 @@
                 let isComplete = false;
 
                 if (subject === 'L') {
-                    // 需要 S1, S2, S3, S4
                     if (parts['S1']!=null && parts['S2']!=null && parts['S3']!=null && parts['S4']!=null) {
                         totalCorrect = parts['S1'] + parts['S2'] + parts['S3'] + parts['S4'];
                         isComplete = true;
                     }
                 } else if (subject === 'R') {
-                    // 需要 P1, P2, P3
                     if (parts['P1']!=null && parts['P2']!=null && parts['P3']!=null) {
                         totalCorrect = parts['P1'] + parts['P2'] + parts['P3'];
                         isComplete = true;
@@ -266,21 +271,17 @@
                     completedTests.push({
                         label: `${g.book} ${g.test}`,
                         date: g.date,
-                        value: getBandScore(totalCorrect, subject), // 转换为 Band Score
+                        value: getBandScore(totalCorrect, subject),
                         rawTotal: totalCorrect
                     });
                 }
             });
 
-            // 按日期排序
             completedTests.sort((a, b) => new Date(a.date) - new Date(b.date));
-
             const avg = completedTests.length ? (completedTests.reduce((a, b) => a + b.value, 0) / completedTests.length).toFixed(1) : '-';
             return { avg, trend: completedTests, count: completedTests.length };
         };
 
-
-        // --- 组件：手绘图片 ---
         const SketchImage = ({ src, alt, className }) => {
             const [error, setError] = useState(false);
             useEffect(() => { setError(false); }, [src]);
@@ -296,7 +297,6 @@
             );
         };
 
-        // --- 主组件 ---
         function App() {
             const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('ielts_records') || '[]'));
             const [unlockedLandmarks, setUnlockedLandmarks] = useState(() => JSON.parse(localStorage.getItem('ielts_landmarks') || '[]'));
@@ -306,6 +306,9 @@
                 return d ? new Date(d) : new Date(0); 
             });
             const [targetDateStr, setTargetDateStr] = useState(() => localStorage.getItem('ielts_target_date') || DEFAULT_TARGET_DATE);
+            
+            // New: Custom Tags State
+            const [customTagsMap, setCustomTagsMap] = useState(() => JSON.parse(localStorage.getItem('ielts_custom_tags') || '{"L":[],"R":[],"W":[],"S":[]}'));
 
             const [showDataCenter, setShowDataCenter] = useState(false);
             const [showJournal, setShowJournal] = useState(false);
@@ -319,11 +322,21 @@
                 localStorage.setItem('ielts_map_cycle', mapCycle.toString());
                 localStorage.setItem('ielts_map_reset_date', mapResetDate.toISOString());
                 localStorage.setItem('ielts_target_date', targetDateStr);
-            }, [records, unlockedLandmarks, mapCycle, mapResetDate, targetDateStr]);
+                localStorage.setItem('ielts_custom_tags', JSON.stringify(customTagsMap));
+            }, [records, unlockedLandmarks, mapCycle, mapResetDate, targetDateStr, customTagsMap]);
 
             const showToast = (text, type = 'info') => {
                 setNotification({ text, type });
                 setTimeout(() => setNotification(null), 3000);
+            };
+
+            const handleAddCustomTag = (subject, tag) => {
+                if (!customTagsMap[subject].includes(tag)) {
+                    setCustomTagsMap(prev => ({
+                        ...prev,
+                        [subject]: [...(prev[subject] || []), tag]
+                    }));
+                }
             };
 
             const handleAddRecord = (newRecord) => {
@@ -365,7 +378,6 @@
                 const newRecords = records.filter(r => r.id !== id);
                 setRecords(newRecords);
 
-                // Check landmark link
                 if (recordToDelete && recordToDelete.landmarkId) {
                     const isStillUsed = newRecords.some(r => r.landmarkId === recordToDelete.landmarkId);
                     if (!isStillUsed) {
@@ -397,6 +409,8 @@
                         onOpenJournal={() => setShowJournal(true)} 
                         targetDateStr={targetDateStr}
                         setTargetDateStr={setTargetDateStr}
+                        customTagsMap={customTagsMap}
+                        onSaveCustomTag={handleAddCustomTag}
                     />
                     <div className="flex-1 relative bg-[#89cff0]">
                         <HandDrawnMap 
@@ -443,7 +457,7 @@
         }
 
         // --- Sidebar ---
-        function Sidebar({ onAddRecord, onOpenData, onOpenJournal, targetDateStr, setTargetDateStr }) {
+        function Sidebar({ onAddRecord, onOpenData, onOpenJournal, targetDateStr, setTargetDateStr, customTagsMap, onSaveCustomTag }) {
             const [form, setForm] = useState({ book: 'Cam 20', test: 'Test 1', subject: 'L', part: 'S1', score: '', topic: '', tags: [], note: '' });
             const [daysLeft, setDaysLeft] = useState(0);
             const [customTag, setCustomTag] = useState('');
@@ -457,6 +471,18 @@
             }, [targetDateStr]);
 
             const updateField = (f, v) => setForm(prev => ({ ...prev, [f]: v }));
+            
+            const handleSubjectChange = (e) => {
+                const newSub = e.target.value;
+                const defaultPart = SUBJECT_CONFIG[newSub].parts[0]; 
+                setForm(prev => ({
+                    ...prev,
+                    subject: newSub,
+                    part: defaultPart,
+                    tags: [] // Clear tags on subject switch? Optional, but safer
+                }));
+            };
+
             const toggleTag = (tag) => {
                 setForm(prev => {
                     const newTags = prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag];
@@ -466,7 +492,9 @@
 
             const addCustomTag = () => {
                 if (customTag.trim()) {
-                    toggleTag(customTag.trim());
+                    const newTag = customTag.trim();
+                    toggleTag(newTag);
+                    onSaveCustomTag(form.subject, newTag); // Persist tag
                     setCustomTag('');
                     setShowCustomTagInput(false);
                 }
@@ -485,6 +513,11 @@
 
             const books = Array.from({length: 20}, (_, i) => `Cam ${20-i}`).concat(Array.from({length: 9}, (_, i) => `机经 ${9-i}`));
             const currentConfig = SUBJECT_CONFIG[form.subject];
+            
+            // Merge default tags with custom tags for the current subject
+            const allAvailableTags = [...DIAGNOSIS_TAGS[form.subject], ...(customTagsMap[form.subject] || [])];
+            // Remove duplicates just in case
+            const uniqueAvailableTags = [...new Set(allAvailableTags)];
 
             return (
                 <div className="w-[380px] h-full bg-white border-r border-gray-300 flex flex-col shadow-xl z-20">
@@ -515,7 +548,12 @@
                             <div className="w-24"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Test</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.test} onChange={e=>updateField('test', e.target.value)}>{['Test 1','Test 2','Test 3','Test 4'].map(t => <option key={t}>{t}</option>)}</select></div>
                         </div>
                         <div className="flex gap-3">
-                            <div className="flex-1"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Subject</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm font-bold" style={{ color: currentConfig.color }} value={form.subject} onChange={e=>updateField('subject', e.target.value)}>{Object.entries(SUBJECT_CONFIG).map(([k, v]) => (<option key={k} value={k}>{v.icon} {v.label}</option>))}</select></div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Subject</label>
+                                <select className="w-full p-2 border border-gray-300 rounded font-sans text-sm font-bold" style={{ color: currentConfig.color }} value={form.subject} onChange={handleSubjectChange}>
+                                    {Object.entries(SUBJECT_CONFIG).map(([k, v]) => (<option key={k} value={k}>{v.icon} {v.label}</option>))}
+                                </select>
+                            </div>
                             <div className="w-24"><label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Part</label><select className="w-full p-2 border border-gray-300 rounded font-sans text-sm" value={form.part} onChange={e=>updateField('part', e.target.value)}>{currentConfig.parts.map(p => <option key={p}>{p}</option>)}</select></div>
                         </div>
                         <div>
@@ -527,11 +565,8 @@
                         <div className="bg-gray-50 p-3 rounded border border-gray-200">
                             <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Diagnosis</label>
                             <div className="flex flex-wrap gap-2">
-                                {DIAGNOSIS_TAGS[form.subject].map(tag => (
+                                {uniqueAvailableTags.map(tag => (
                                     <button key={tag} onClick={() => toggleTag(tag)} className={`px-2 py-1 rounded-full text-xs border transition-all ${form.tags.includes(tag) ? 'bg-[#2c3e50] text-white border-[#2c3e50]' : 'bg-white text-gray-500 border-gray-300 hover:border-[#2c3e50]'}`}>{tag}</button>
-                                ))}
-                                {form.tags.filter(t => !DIAGNOSIS_TAGS[form.subject].includes(t)).map(tag => (
-                                    <button key={tag} onClick={() => toggleTag(tag)} className="px-2 py-1 rounded-full text-xs border transition-all bg-[#2c3e50] text-white border-[#2c3e50]">{tag}</button>
                                 ))}
                                 {showCustomTagInput ? (
                                     <div className="flex items-center gap-1">
@@ -566,15 +601,12 @@
             const config = SUBJECT_CONFIG[activeTab];
             const filteredRecords = records.filter(r => r.subject === activeTab);
             
-            // 计算聚合统计数据 (Average, Trend) - 只针对完整 Test 计算
             const stats = useMemo(() => processTestStats(records, activeTab), [records, activeTab]);
 
-            // Chart Data Logic: Switch between 'All' (Band Score) and 'Part' (Raw Count)
             const chartData = useMemo(() => {
                 if (activePartFilter === 'All') {
-                    return stats.trend; // { label, value } where value is Band Score
+                    return stats.trend; 
                 } else {
-                    // Filter specific part
                     return filteredRecords
                         .filter(r => r.part === activePartFilter)
                         .sort((a,b) => new Date(a.date) - new Date(b.date))
@@ -585,7 +617,6 @@
                 }
             }, [activePartFilter, stats, filteredRecords]);
 
-            // Dynamic Average Calculation based on filter
             const currentAvg = useMemo(() => {
                 if (activePartFilter === 'All') return stats.avg;
                 const partRecords = filteredRecords.filter(r => r.part === activePartFilter);
@@ -601,21 +632,19 @@
                 setActivePartFilter('All'); 
             };
 
-            // Chart Rendering
             useEffect(() => {
                 if (canvasRef.current) {
                     if (chartInstance.current) chartInstance.current.destroy();
                     const ctx = canvasRef.current.getContext('2d');
                     
-                    const trendData = chartData.slice(-15); // Show last 15 entries
+                    const trendData = chartData.slice(-15); 
 
-                    // Determine Scale Range
                     let minVal = 0;
                     let maxVal = 9;
                     if (activePartFilter !== 'All' && (activeTab === 'L' || activeTab === 'R')) {
-                        maxVal = 10; // Raw count usually out of 10 for parts
+                        maxVal = 15; // Increased to 15 to accommodate P3/S4 extra questions
                     } else if (activePartFilter === 'All') {
-                        minVal = 4; // Band scores rarely go below 4 visual
+                        minVal = 4; 
                     }
 
                     chartInstance.current = new Chart(ctx, {
@@ -650,12 +679,9 @@
                     });
                 }
 
-                // Pie Chart
                 if (pieCanvasRef.current) {
                     if (pieInstance.current) pieInstance.current.destroy();
                     const tagCounts = {};
-                    // Filter diagnosis tags based on current part filter as well? 
-                    // Usually diagnosis is specific to the record.
                     const diagRecords = activePartFilter === 'All' ? filteredRecords : filteredRecords.filter(r => r.part === activePartFilter);
                     
                     diagRecords.forEach(r => { r.tags.forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }); });
@@ -673,7 +699,6 @@
                 return () => { if(chartInstance.current) chartInstance.current.destroy(); if(pieInstance.current) pieInstance.current.destroy(); };
             }, [activeTab, chartData, config, activePartFilter]);
 
-            // Matrix Data Construction for Grouped View
             const matrixData = useMemo(() => {
                 if (viewMode !== 'grouped') return null;
                 const books = {};
@@ -700,7 +725,6 @@
                                 <div>
                                     <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2" style={{ color: config.color }}>{config.icon} {config.label}</h2>
                                     
-                                    {/* Part Filter Buttons */}
                                     <div className="flex gap-2 mt-3">
                                         <button 
                                             onClick={() => setActivePartFilter('All')} 
@@ -788,8 +812,6 @@
                                                                     else hasAllParts = false;
                                                                 });
                                                                 const band = hasAllParts ? getBandScore(totalCount, activeTab) : '-';
-                                                                
-                                                                // 如果这一行完全没有数据，是否隐藏？用户希望看到Test 1-4排列，所以保留空行更好，或者置灰
                                                                 const isEmpty = Object.keys(testData).length === 0;
 
                                                                 return (
@@ -872,10 +894,6 @@
                 const activeRecords = records.filter(r => new Date(r.date) >= mapResetDate && (r.subject === 'L' || r.subject === 'R') && r.countryId);
                 
                 activeRecords.forEach(r => {
-                    // 地图颜色逻辑保持原样，高分显示金色。
-                    // 这里我们假设 r.score 是答对数量 (e.g. 9/10)，通常大于8都算不错
-                    // 或者如果是总分... 
-                    // 为了简单起见，这里沿用原始逻辑: r.score 如果是Part score, 比如10，就是High
                     if (!statusMap[r.countryId] || parseFloat(r.score) > parseFloat(statusMap[r.countryId].record.score)) {
                         statusMap[r.countryId] = { record: r };
                     }
@@ -886,7 +904,6 @@
                     let statusClass = 'fill-default';
                     if (recordInfo) {
                         const s = parseFloat(recordInfo.record.score);
-                        // 简单阈值：如果是Part Score (0-10) 或 Band Score (0-9)
                         if (s >= 8.0) statusClass = 'fill-high';
                         else if (s >= 6.5) statusClass = 'fill-mid'; 
                         else if (s >= 5.0) statusClass = 'fill-pass'; 
